@@ -1,6 +1,6 @@
 # Receipts: handover
 
-Last updated 19 September 2026. For how each data source works and its quirks, see `README.md`. This file covers
+Last updated 22 September 2026. For how each data source works and its quirks, see `README.md`. This file covers
 where the project stands, the database, decisions already made, and what to do next.
 
 ## What this is
@@ -16,9 +16,15 @@ and agencies, never named public servants. Publish the method for every claim.
 
     npm install
     npm run dev -- -p 3070        # 3000 to 3060 are usually taken on this machine
-    PORT=3070 npm run snapshot    # store today's figures in the local database (dev server must be running)
+    npm run snapshot              # store today's figures in the database AND build the public site into out/
 
-Needs Node 22.5 or later (built-in SQLite). Developed on Node 24. Not yet a git repository, and there are no tests.
+`npm run snapshot` is a static export (`STATIC_EXPORT=1 SNAPSHOT=1 next build`). The snapshot runs inside the
+build, in `app/api/snapshot/route.ts`, because the source loaders use Next's cache and can't run outside a Next
+process. Stop the dev server before running it; both use `.next`.
+
+Needs Node 22.5 or later (built-in SQLite). Developed on Node 24. There are no tests.
+Public repository: https://github.com/MrAnderson-bot/receipts (AGPLv3, `LICENSE` in place). `docs/HANDOVER-launch.md`
+and `docs/launch-tools/` are owner-only and git-ignored.
 
 ## Pages
 
@@ -29,10 +35,10 @@ Needs Node 22.5 or later (built-in SQLite). Developed on Node 24. Not yet a git 
 | `/revenue` | Commonwealth receipts by source, share of GDP, taxes by level of government |
 | `/budget` | Budget balance, expenses by function, net debt, largest programs |
 | `/companies` | Tax Office transparency list (about 4,100 large companies), company profits by industry |
-| `/spending` | Commonwealth contracts: late reporting, limited tender, agencies, suppliers (nav label "Contracts") |
-| `/categories` | What contracts buy, by UNSPSC segment |
-| `/grants` | Commonwealth grant awards |
-| `/states` | NSW, VIC, QLD, WA, NT, TAS contracts and ACT invoices |
+| `/spending` | Commonwealth contracts: late reporting, limited tender, agencies, suppliers (nav label "Contracts"). `/spending/7`, `/spending/90` for other ranges |
+| `/categories` | What contracts buy, by UNSPSC segment (same `/7`, `/90` ranges) |
+| `/grants` | Commonwealth grant awards (same ranges) |
+| `/states` | NSW, VIC, QLD, WA, NT, TAS contracts and ACT invoices. `/states/QLD` etc. |
 | `/sources` | Every feed with live status, database totals, and what isn't connected |
 
 ## How the code is laid out
@@ -68,10 +74,10 @@ as observations; Budget estimates stay inside the dated `budget` snapshot becaus
 
 After the first run: 37 series, 2,361 observations, 18 snapshots, 4,198 companies, 30 of 30 sources saved.
 
-How it runs: `POST /api/snapshot` calls `runSnapshot()` in `lib/db/snapshot.ts`; `npm run snapshot` just calls that
-endpoint. The endpoint returns 404 in production, because the database is a local file and a public site must not
-expose something that makes it fetch every source on demand. Nothing schedules it yet, so it has to be run by hand
-(or by Windows Task Scheduler) each day.
+How it runs: `GET /api/snapshot` calls `runSnapshot()` in `lib/db/snapshot.ts` when the process has `SNAPSHOT=1`;
+`npm run snapshot` runs a static export with that set, so the route is rendered once during the build and the
+snapshot happens then. In the exported site, `out/api/snapshot` is a plain JSON file of database totals; nothing
+public can trigger a run. On the VM, `deploy/receipts-publish.timer` runs it every morning.
 
 ### Moving to Supabase later
 
@@ -98,8 +104,27 @@ This replaces the Supabase and Vercel Cron route above unless there is a reason 
   non-commercial.
 - **"What if" sliders run in the visitor's browser** from a small file of model figures the VM publishes. Only add a
   public service on the VM if a model is too heavy for a browser, and rate-limit it if so.
-- Needed before this works: pages must read from the database rather than the live sources (step 4 below), and the
-  app must build as a static export.
+- **Done on 22 September 2026:** the app builds as a static export (`npm run snapshot` produces `out/`), and the
+  VM's job is written: `deploy/vm-setup.sh` (one-time), `deploy/publish.sh` (nightly: pull, snapshot + build, push to
+  Cloudflare Pages, back the database up to Cloud Storage), and the systemd timer at 04:30 Canberra time. The pages
+  still read the live sources at build time; reading from the database (step 4 below) is a later improvement, not a
+  blocker.
+- **Not done: the VM and the Pages project don't exist yet.** Both need the owner's personal accounts
+  (a personal Google account); the `gcloud` and `wrangler` logins on the dev machine were the company account, and
+  nothing was created under it. Steps, once logged in as the personal account:
+  1. Cloudflare: `npx wrangler pages project create receipts --production-branch main`, then a first deploy from
+     the dev machine, `npx wrangler pages deploy out --project-name receipts --branch main`. Make an API token
+     (Cloudflare Pages: Edit) for the VM.
+  2. Google Cloud: new project, billing attached, `gcloud compute instances create receipts-engine
+     --zone us-west1-b --machine-type e2-micro --image-family debian-12 --image-project debian-cloud
+     --boot-disk-size 20GB --scopes storage-rw`. e2-micro in a US region is inside the free tier; the sources are all
+     public HTTP so the region doesn't matter. Remove the default SSH-from-anywhere firewall rule and use
+     `gcloud compute ssh --tunnel-through-iap` instead, so nothing is reachable from the internet.
+  3. On the VM: `sudo bash vm-setup.sh https://github.com/MrAnderson-bot/receipts.git`, fill in
+     `/etc/receipts.env`, run the service once, check `journalctl -u receipts-publish`.
+  4. Optional: a Cloud Storage bucket for `BACKUP_BUCKET`, and a custom domain on the Pages project.
+- Every page carries an "Under development" banner (`components/DevBanner.tsx`) listing what has been collected and
+  saying it may be incomplete. Keep it until the figures have been spot-checked.
 - Migration data comes from the AID project (`Projects\AID`, repo `REKT369/AID`): port its readers in as source
   modules here rather than merging the apps. Reading notes for the engine are in `docs/prediction-engine-reading.md`.
 
@@ -147,13 +172,19 @@ arrive in the next Budget's tables). WA's newest open contract file is 2023-24. 
 
 ## What to do next, in order
 
-1. **Put it in git** and push to a public repository. `.gitignore` is already in place. Add the AGPLv3 `LICENSE` file
-   first: the README describes AGPL as the plan, but it is not in force until that file exists.
-2. **Schedule the daily snapshot** so history accumulates from now. Every day without it is history lost.
-3. **ABN cross-link.** Join `companies` to AusTender suppliers, grant recipients and state suppliers by ABN. This
-   needs contracts and grants stored per record, not only as summaries: add `contracts` and `grants` tables and save
-   them in the snapshot job. It answers "which companies with no tax payable hold government contracts, and for how
-   much", using data already being fetched.
+1. ~~Put it in git~~ Done: https://github.com/MrAnderson-bot/receipts, AGPLv3.
+2. **Create the VM and the Pages project** (hosting plan above). Until the VM runs, every day without a snapshot
+   is history lost; `npm run snapshot` on the dev machine fills the gap.
+3. **Per-record tables, matching the government's records one-to-one.** Add `contracts` and `grants` tables holding
+   every field the publisher shows for a record, not the trimmed summary shape in `lib/sources/austender.ts`. For
+   AusTender that means everything on a tenders.gov.au contract notice page: execution date, extension options and
+   max end date, ATM ID, "Australian business engaged", "New Zealand business engaged", suppliers invited,
+   confidentiality flags and reasons, consultancy flag, agency reference ID, and the supplier's full address. The
+   OCDS API carries only some of these, so record which fields are web-only and find an honest way to get them
+   (a plain script fetch of a notice page returned the site shell without the record on 21 September 2026). The
+   goal is that a future AI agent has the full who, what, when, where and with whom for every record. Then the
+   **ABN cross-link**: join `companies` to suppliers and grant recipients by ABN to answer "which companies with no
+   tax payable hold government contracts, and for how much".
 4. **Read history back into the pages**: revision markers on the economy charts, and "this figure a month ago" on
    contracts and grants, from `seriesHistory()` and `snapshots()`.
 5. **Fill the indicator gaps**, all available without keys: housing (dwelling values, approvals, lending, rents),
