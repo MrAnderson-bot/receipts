@@ -1,0 +1,12 @@
+[Unit]
+Description=Receipts: snapshot, build and publish the site
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=receipts
+WorkingDirectory=/opt/receipts
+Environment=APP_DIR=/opt/receipts
+ExecStart=/usr/bin/bash /opt/receipts/deploy/publish.sh
+TimeoutStartSec=2h

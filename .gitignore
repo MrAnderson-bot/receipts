@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+.env*
+
+# local database (rebuilt by npm run snapshot)
+data/receipts.db
+data/receipts.db-wal
+data/receipts.db-shm
+tsconfig.tsbuildinfo
+
+# owner-only notes (stream, fundraiser, image tools); not part of the open-source project
+docs/HANDOVER-launch.md
+docs/launch-tools/

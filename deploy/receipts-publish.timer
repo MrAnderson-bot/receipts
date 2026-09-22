@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Receipts publish job every morning
+
+[Timer]
+# 04:30 Canberra time, after the previous day's AusTender notices are in.
+OnCalendar=*-*-* 04:30:00 Australia/Sydney
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
