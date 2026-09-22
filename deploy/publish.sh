@@ -12,7 +12,12 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/receipts}"
 cd "$APP_DIR"
-[ -f /etc/receipts.env ] && set -a && . /etc/receipts.env && set +a
+# Under systemd the settings arrive via EnvironmentFile. When run by hand as
+# root, read the file here; as another user it is unreadable, so say so.
+if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+  if [ -r /etc/receipts.env ]; then set -a; . /etc/receipts.env; set +a;
+  else echo "CLOUDFLARE_API_TOKEN is not set and /etc/receipts.env is not readable by $(whoami)." >&2; exit 1; fi
+fi
 
 log() { echo "[$(date -u +%FT%TZ)] $*"; }
 
