@@ -109,20 +109,20 @@ This replaces the Supabase and Vercel Cron route above unless there is a reason 
   Cloudflare Pages, back the database up to Cloud Storage), and the systemd timer at 04:30 Canberra time. The pages
   still read the live sources at build time; reading from the database (step 4 below) is a later improvement, not a
   blocker.
-- **Not done: the VM and the Pages project don't exist yet.** Both need the owner's personal accounts
-  (a personal Google account); the `gcloud` and `wrangler` logins on the dev machine were the company account, and
-  nothing was created under it. Steps, once logged in as the personal account:
-  1. Cloudflare: `npx wrangler pages project create receipts --production-branch main`, then a first deploy from
-     the dev machine, `npx wrangler pages deploy out --project-name receipts --branch main`. Make an API token
-     (Cloudflare Pages: Edit) for the VM.
-  2. Google Cloud: new project, billing attached, `gcloud compute instances create receipts-engine
-     --zone us-west1-b --machine-type e2-micro --image-family debian-12 --image-project debian-cloud
-     --boot-disk-size 20GB --scopes storage-rw`. e2-micro in a US region is inside the free tier; the sources are all
-     public HTTP so the region doesn't matter. Remove the default SSH-from-anywhere firewall rule and use
-     `gcloud compute ssh --tunnel-through-iap` instead, so nothing is reachable from the internet.
-  3. On the VM: `sudo bash vm-setup.sh https://github.com/MrAnderson-bot/receipts.git`, fill in
-     `/etc/receipts.env`, run the service once, check `journalctl -u receipts-publish`.
-  4. Optional: a Cloud Storage bucket for `BACKUP_BUCKET`, and a custom domain on the Pages project.
+- **Live since 22 September 2026**, all under the owner's personal accounts (a personal Google account), never the
+  company's, and everything in Sydney:
+  - Public site: https://receipts-byv.pages.dev (Cloudflare Pages project `receipts`, classic Pages, created with
+    `--force` because wrangler otherwise tries to convert a Next.js app to its Workers adapter and edits the repo;
+    if that ever happens again, revert `next.config.mjs`, `package.json` and delete `wrangler.jsonc`,
+    `open-next.config.ts`, `public/_headers`, `.dev.vars`).
+  - Google Cloud project the project, VM `receipts-engine` (e2-micro, `australia-southeast1-b`, Debian 12,
+    about AUD 10-12 a month), bucket `the backup bucket`. The default SSH/RDP/ICMP firewall rules are
+    deleted; SSH only through IAP: `gcloud compute ssh receipts-engine --zone australia-southeast1-b --tunnel-through-iap`.
+  - On the VM: repo at `/opt/receipts`, job user `receipts`, `receipts-publish.timer` at 04:30 Canberra time. Secrets
+    in `/etc/receipts.env`. Logs: `journalctl -u receipts-publish`.
+  - Until the VM has a Cloudflare API token in `/etc/receipts.env`, deploy by hand from the dev machine:
+    `npm run snapshot && npx wrangler pages deploy out --project-name receipts --branch main`.
+  - Not done: a custom domain on the Pages project.
 - Every page carries an "Under development" banner (`components/DevBanner.tsx`) listing what has been collected and
   saying it may be incomplete. Keep it until the figures have been spot-checked.
 - Migration data comes from the AID project (`Projects\AID`, repo `REKT369/AID`): port its readers in as source
@@ -173,8 +173,10 @@ arrive in the next Budget's tables). WA's newest open contract file is 2023-24. 
 ## What to do next, in order
 
 1. ~~Put it in git~~ Done: https://github.com/MrAnderson-bot/receipts, AGPLv3.
-2. **Create the VM and the Pages project** (hosting plan above). Until the VM runs, every day without a snapshot
-   is history lost; `npm run snapshot` on the dev machine fills the gap.
+2. ~~Create the VM and the Pages project~~ Done (hosting plan above). Remaining: put a Cloudflare API token
+   (Cloudflare Pages: Edit, on the personal account) and the account id `2779902e70532b99496bfced7aa61ebf` into
+   `/etc/receipts.env` on the VM, then `sudo systemctl start receipts-publish.service` and check the log. Until
+   then, `npm run snapshot` on the dev machine keeps history accumulating.
 3. **Per-record tables, matching the government's records one-to-one.** Add `contracts` and `grants` tables holding
    every field the publisher shows for a record, not the trimmed summary shape in `lib/sources/austender.ts`. For
    AusTender that means everything on a tenders.gov.au contract notice page: execution date, extension options and
