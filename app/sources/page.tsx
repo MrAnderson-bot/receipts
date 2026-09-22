@@ -9,6 +9,7 @@ import { tryGetTaxByLevel } from "@/lib/sources/abs-tax";
 import { tryGetBudget } from "@/lib/sources/budget";
 import { tryGetTransparency } from "@/lib/sources/ato-transparency";
 import { tryGetState, STATE_CODES, NOT_CONNECTED as STATES_NOT_CONNECTED } from "@/lib/sources/states";
+import { tryGetMigration } from "@/lib/sources/migration";
 import { getStore, type DbStats } from "@/lib/db";
 import { num } from "@/lib/format";
 
@@ -33,9 +34,9 @@ const NOT_CONNECTED = [
 ];
 
 export default async function Page() {
-  const [indicators, spending, grants, revenue, levels, budget, companies, ...states] = await Promise.all([
+  const [indicators, spending, grants, revenue, levels, budget, companies, migration, ...states] = await Promise.all([
     getIndicators(), tryGetSummary(7), tryGetGrants(7), tryGetRevenue(), tryGetTaxByLevel(),
-    tryGetBudget(), tryGetTransparency(), ...STATE_CODES.map((c) => tryGetState(c)),
+    tryGetBudget(), tryGetTransparency(), tryGetMigration(), ...STATE_CODES.map((c) => tryGetState(c)),
   ]);
   const okIds = new Set(indicators.filter((r) => r.series).map((r) => r.id));
   const count = (ids: string[]) => `${ids.filter((id) => okIds.has(id)).length} of ${ids.length} series answering`;
@@ -106,6 +107,27 @@ export default async function Page() {
       licence: "CC BY 3.0 AU",
       ok: !!companies.data,
       status: companies.data ? `${num(companies.data.totals.entities)} companies, income year ${companies.data.year}` : `Not answering. ${companies.error}`,
+    },
+    {
+      name: "Department of Home Affairs, visa statistics on data.gov.au",
+      url: "https://data.gov.au/data/group/immigration",
+      gives: "temporary visa holders by category and date; skilled and working holiday visas granted by year; permanent Migration Program outcomes; the Australian Migration Statistics package (program history since 1984-85, temporary visas granted, NOM by visa category, citizenship by country)",
+      licence: "CC BY 3.0 AU",
+      ok: [migration.tempHolders, migration.skilled, migration.whm, migration.permanent, migration.package].some((p) => p.data),
+      status: (() => {
+        const parts = { "temporary visa holders": migration.tempHolders, "skilled grants": migration.skilled, "working holiday grants": migration.whm, "permanent program": migration.permanent, "statistics package": migration.package };
+        const down = Object.entries(parts).filter(([, p]) => !p.data);
+        const t = migration.tempHolders.data;
+        return `${Object.keys(parts).length - down.length} of ${Object.keys(parts).length} files read${t ? `, holders at ${t.latest.date}` : ""}${down.length ? `. Not answering: ${down.map(([n, p]) => `${n} (${p.error})`).join("; ")}` : ""}`;
+      })(),
+    },
+    {
+      name: "ABS, Overseas Migration",
+      url: "https://www.abs.gov.au/statistics/people/population/overseas-migration",
+      gives: "net overseas migration, long-term arrivals and departures, by financial year",
+      licence: "CC BY 4.0",
+      ok: !!migration.nom.data,
+      status: migration.nom.data ? `To ${migration.nom.data.latest.year.replace(/^FY/, "")}` : `Not answering. ${migration.nom.error}`,
     },
     ...states.map((s, i) => ({
       name: s.data ? `${s.data.name}: ${s.data.sourceName}` : `${STATE_CODES[i]} contracts`,

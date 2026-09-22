@@ -39,6 +39,7 @@ and `docs/launch-tools/` are owner-only and git-ignored.
 | `/categories` | What contracts buy, by UNSPSC segment (same `/7`, `/90` ranges) |
 | `/grants` | Commonwealth grant awards (same ranges) |
 | `/states` | NSW, VIC, QLD, WA, NT, TAS contracts and ACT invoices. `/states/QLD` etc. |
+| `/migration` | Net overseas migration, temporary visa holders, permanent program, skilled and working holiday grants, citizenship by country |
 | `/sources` | Every feed with live status, database totals, and what isn't connected |
 
 ## How the code is laid out
@@ -125,8 +126,20 @@ This replaces the Supabase and Vercel Cron route above unless there is a reason 
   - Not done: a custom domain on the Pages project.
 - Every page carries an "Under development" banner (`components/DevBanner.tsx`) listing what has been collected and
   saying it may be incomplete. Keep it until the figures have been spot-checked.
-- Migration data comes from the AID project (`Projects\AID`, repo `REKT369/AID`): port its readers in as source
-  modules here rather than merging the apps. Reading notes for the engine are in `docs/prediction-engine-reading.md`.
+- **Migration (ported from the AID project on 22 September 2026, `Projects\AID`, repo `REKT369/AID`; its owner gave
+  permission to use it).** `lib/sources/migration.ts` reads the four Home Affairs pivot exports AID used (BP0019 temporary
+  visa holders, BP0014 skilled grants, BP0017 working holiday grants, BP0068 permanent program outcomes) plus the
+  Australian Migration Statistics package (tables 1.0, 2.0, 5.0, 5.1, 6.0), and takes net overseas migration from the ABS
+  Data API (`NOM_FY`, key `3.TOT.3.AUS.A`). Differences from AID, on purpose: files are found through the data.gov.au
+  catalogue (AID hard-coded dated URLs; Home Affairs replaces each file in place every release); AID's three hand-typed
+  JSON files (NOM, citizenship history, an "arrivals counter" that extrapolated a daily rate) are not carried over, because
+  they were not read from a published file. Citizenship therefore shows only table 6.0 (top 15 countries, latest year), and
+  NOM by visa category comes from the package tables rather than AID's unsourced numbers. Suppressed "<5" cells are
+  treated as missing and said so on the page. Reading notes for the engine are in `docs/prediction-engine-reading.md`.
+- **Dev-server quirk:** the first cold render of `/migration` under `next dev` logs "failed to pipe response: Maximum call
+  stack size exceeded" and sends a truncated page; every request after that is complete, and the production static build
+  is fine. It happens while the 20 MB skilled-visas file is downloaded inside the render and looks like a dev-only cache
+  behaviour. Not investigated further because the deployed site never uses the dev server.
 
 ## Decisions already made (please don't undo without a reason)
 

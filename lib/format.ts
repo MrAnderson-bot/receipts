@@ -13,12 +13,12 @@ type Unit = "%" | "index" | "AUD" | "USD" | "people";
 const fixed = (n: number, d: number) =>
   n.toLocaleString("en-AU", { minimumFractionDigits: d, maximumFractionDigits: d });
 
-// A series value in its own unit, e.g. 4.5%, US$0.6650, 27.92M.
+// A series value in its own unit, e.g. 4.5%, US$0.6650, 27.92M, 305,570.
 export function value(n: number, unit: Unit, decimals = 1): string {
   if (unit === "%") return `${fixed(n, decimals)}%`;
   if (unit === "USD") return `US$${fixed(n, decimals)}`;
   if (unit === "AUD") return money(n);
-  if (unit === "people") return `${fixed(n / 1e6, decimals)}M`;
+  if (unit === "people") return Math.abs(n) >= 1e6 ? `${fixed(n / 1e6, decimals)}M` : num(Math.round(n));
   return fixed(n, decimals);
 }
 

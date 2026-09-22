@@ -10,6 +10,7 @@ import { tryGetBudget } from "../sources/budget";
 import { tryGetTransparency, loadAllEntities } from "../sources/ato-transparency";
 import { tryGetProfits } from "../sources/abs-profits";
 import { tryGetState, STATE_CODES } from "../sources/states";
+import { tryGetMigration } from "../sources/migration";
 import type { Series } from "../sources/types";
 import type { YearValue } from "../sources/treasury";
 
@@ -100,6 +101,26 @@ export async function runSnapshot(): Promise<RunResult[]> {
       const d = need(await tryGetGrants(days));
       await store.saveSnapshot("grants", `${days}d`, d);
       return `${d.count} grants`;
+    });
+  }
+
+  // Migration: each file is its own step, and every series it yields is stored so revisions stay visible.
+  const migration = await tryGetMigration();
+  const migrationParts: [string, { data: any; error: string | null }, (d: any) => { series: import("../sources/types").Series[]; key: string }][] = [
+    ["temp-visa-holders", migration.tempHolders, (d) => ({ series: [d.series], key: d.latest.date })],
+    ["skilled-visas", migration.skilled, (d) => ({ series: [d.series], key: d.latest.year.year })],
+    ["working-holiday", migration.whm, (d) => ({ series: [d.series], key: d.latest.year.year })],
+    ["permanent-program", migration.permanent, (d) => ({ series: [d.series], key: d.latest.year })],
+    ["migration-package", migration.package, (d) => ({ series: [d.program.series, d.tempGranted.series], key: d.citizenship.year })],
+    ["net-overseas-migration", migration.nom, (d) => ({ series: [d.series, d.arrivals, d.departures], key: d.latest.year })],
+  ];
+  for (const [name, part, pick] of migrationParts) {
+    await step(`migration:${name}`, async () => {
+      const d = need(part);
+      const { series, key } = pick(d);
+      for (const s of series) await store.saveSeries(s);
+      await store.saveSnapshot(`migration:${name}`, key, d);
+      return `${series.length} series, ${key}`;
     });
   }
 

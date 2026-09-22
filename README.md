@@ -30,6 +30,7 @@ Needs Node 22.5 or later. See `HANDOVER.md` for project status, the database, ho
 - `/categories`: what the money buys, by UNSPSC segment, split into services and goods, with the biggest buyer and seller in each
 - `/grants`: Commonwealth grant awards by category, selection process, agency, recipient and state (`/grants/7`, `/grants/90`)
 - `/states`: state and territory contracts (`/states/VIC`, `/states/QLD` and so on; NSW by default), plus the state with no usable data and why
+- `/migration`: net overseas migration (ABS), temporary visa holders by category, permanent Migration Program outcomes, skilled and working holiday visas granted, NOM by visa category and new citizens by former citizenship (Home Affairs)
 - `/sources`: every feed, its licence, whether it answered, and what isn't connected yet
 
 ## Database
