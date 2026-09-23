@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { tryGetSummary, rangeParams, daysFrom, DEADLINE_DAYS, type Summary, type RangeParams } from "@/lib/sources/austender";
+import { tryGetSummary, rangeParams, daysFrom, noticePageId, noticeUrl, DEADLINE_DAYS, type Summary, type RangeParams } from "@/lib/sources/austender";
+import { getStore, type Contradiction, type DbStats } from "@/lib/db";
 import { money, moneyFull, pct, num } from "@/lib/format";
 import { DailyChart } from "@/components/DailyChart";
 import { RangeNav } from "@/components/RangeNav";
@@ -10,6 +11,8 @@ export const generateStaticParams = rangeParams;
 export const metadata: Metadata = { title: "Spending" };
 
 const apiLink = (id: string) => `https://api.tenders.gov.au/ocds/findById/${encodeURIComponent(id)}`;
+// The public page when its id is known, otherwise the API record.
+const recordLink = (id: string, awardId: string | null) => { const p = noticePageId(awardId); return p ? noticeUrl(p) : apiLink(id); };
 
 // AusTender timestamps are UTC; show the date as it reads in Canberra.
 const dayFormat = new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: "Australia/Sydney" });
@@ -18,6 +21,9 @@ const day = (iso: string | null) => (iso && Number.isFinite(Date.parse(iso)) ? d
 export default async function Page({ params }: { params: Promise<RangeParams> }) {
   const days = daysFrom(await params);
   const { data, error } = await tryGetSummary(days);
+  // Read from the local database of notices, which a fresh checkout won't have yet.
+  let contradictions: Contradiction[] = [], db: DbStats | null = null;
+  try { [contradictions, db] = await Promise.all([getStore().contradictions(12), getStore().stats()]); } catch { /* no database */ }
 
   return (
     <>
@@ -31,6 +37,49 @@ export default async function Page({ params }: { params: Promise<RangeParams> })
         </section>
       ) : (
         <Dashboard data={data} days={days} />
+      )}
+
+      {db && db.noticesRead > 0 && (
+        <section>
+          <h2>Records that contradict themselves</h2>
+          <p className="note">
+            Each contract notice asks the agency “Was an Australian business engaged?”. Under the Commonwealth Procurement
+            Rules that means a business that is tax-resident in Australia with its main place of business here. These notices
+            say “Yes” while their own supplier block gives an overseas address or no ABN. Both entries come from the agency.
+            Read so far: {num(db.noticesRead)} of {num(db.contracts)} stored notices; the rest are read a batch a night.
+          </p>
+          {contradictions.length === 0 ? (
+            <p className="note">None among the notices read so far.</p>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Contract</th>
+                    <th scope="col">Agency</th>
+                    <th scope="col">Supplier, as published</th>
+                    <th scope="col">Country / ABN</th>
+                    <th scope="col" className="num">Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contradictions.map((c) => (
+                    <tr key={c.id}>
+                      <td>
+                        <a href={c.pageId ? noticeUrl(c.pageId) : apiLink(c.id)} target="_blank" rel="noreferrer">{c.id}</a>
+                        <div className="desc">{c.description}</div>
+                      </td>
+                      <td>{c.agency}</td>
+                      <td>{c.supplier}</td>
+                      <td>{c.supplierCountry ?? "not stated"} / {c.supplierAbn ?? "none"}</td>
+                      <td className="num">{moneyFull(c.value)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       )}
 
       <footer>
@@ -149,7 +198,7 @@ function Dashboard({ data, days }: { data: Summary; days: number }) {
                         .sort((a, b) => b.value - a.value)
                         .map((c) => (
                           <li key={c.id}>
-                            <a href={apiLink(c.id)} target="_blank" rel="noreferrer">{c.id}</a>{" "}
+                            <a href={recordLink(c.id, c.awardId)} target="_blank" rel="noreferrer">{c.id}</a>{" "}
                             {c.description}, {moneyFull(c.value)}
                           </li>
                         ))}
@@ -195,7 +244,7 @@ function Dashboard({ data, days }: { data: Summary; days: number }) {
               {data.biggest.map((c) => (
                 <tr key={c.id}>
                   <td>
-                    <a href={apiLink(c.id)} target="_blank" rel="noreferrer">{c.id}</a>
+                    <a href={recordLink(c.id, c.awardId)} target="_blank" rel="noreferrer">{c.id}</a>
                     <div className="desc">{c.description}</div>
                     {isFms(c.supplier) && (
                       <details className="more">

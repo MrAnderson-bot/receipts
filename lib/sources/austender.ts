@@ -2,6 +2,7 @@
 // into dashboard figures. Data: AusTender, CC BY 3.0 AU.
 // API docs: https://github.com/austender/austender-ocds-api
 import { segmentOf, isService } from "../unspsc";
+import { USER_AGENT } from "../xlsx";
 
 const BASE = "https://api.tenders.gov.au/ocds";
 const DAY = 86_400_000;
@@ -9,6 +10,7 @@ export const DEADLINE_DAYS = 42; // contracts must be published within 42 days
 
 export type Contract = {
   id: string;
+  awardId: string | null; // carries the id of the notice's web page (see noticePageId)
   agency: string;
   supplier: string;
   supplierAbn: string | null;
@@ -100,8 +102,10 @@ function toContracts(rel: any): (Contract & { amendment: boolean })[] {
       if (Number.isFinite(days)) lateDays = Math.floor(days - DEADLINE_DAYS);
     }
     const unspsc = c.items?.[0]?.classification?.id ?? null;
+    const award = (rel.awards ?? []).find((a: any) => a.id === c.awardID) ?? rel.awards?.[0];
     return {
       id: String(c.id ?? rel.ocid),
+      awardId: award?.id ? String(award.id) : null,
       agency,
       supplier: sup?.name ?? "Unknown supplier",
       supplierAbn: abn,
@@ -120,6 +124,170 @@ function toContracts(rel: any): (Contract & { amendment: boolean })[] {
         /-A\d+$/i.test(String(c.id ?? "")) || tags.includes("contractAmendment"),
     };
   });
+}
+
+// --- the notice web page --------------------------------------------------
+// The API leaves out fields the public page shows: execution date, extension
+// options, the "Australian business engaged" flag, confidentiality and more.
+// The page id is the hex tail of the award id: CN4277004-b918aacd84a6... ->
+// tenders.gov.au/Cn/Show/b918aacd-84a6-4b04-a2b8-69c6ca504c85.
+
+export const noticePageId = (awardId: string | null): string | null => {
+  const hex = awardId?.split("-").pop() ?? "";
+  return /^[0-9a-f]{32}$/i.test(hex) ? hex.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, "$1-$2-$3-$4-$5") : null;
+};
+export const noticeUrl = (pageId: string) => `https://www.tenders.gov.au/Cn/Show/${pageId}`;
+
+// Every labelled field on the page, as published. Dates are ISO; money is a number; the rest is text.
+export type Notice = {
+  cnId: string;
+  agency: string | null;
+  publishDate: string | null;
+  category: string | null;
+  executionDate: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  extensionOptions: number | null;
+  maxEndDate: string | null;
+  value: number | null;
+  description: string | null;
+  procurementMethod: string | null;
+  limitedTenderExemption: string | null;
+  atmId: string | null;
+  sonId: string | null; // standing offer notice, when bought off a panel
+  australianBusiness: string | null; // "Yes" | "No" as written
+  smeEngaged: string | null; // only on some notices
+  smeReason: string | null; // why an SME wasn't engaged
+  nzBusiness: string | null;
+  suppliersInvited: number | null;
+  confidentialContract: string | null;
+  confidentialContractReason: string | null;
+  confidentialOutputs: string | null;
+  confidentialOutputsReason: string | null;
+  consultancy: string | null;
+  agencyReferenceId: string | null;
+  supplierName: string | null;
+  supplierTown: string | null;
+  supplierPostcode: string | null;
+  supplierState: string | null;
+  supplierCountry: string | null;
+  supplierAbn: string | null; // "Exempt" when the supplier has none
+};
+
+// Labels as they appear on the page, in the order they appear. Contact details
+// (agency officer name, phone, email) are deliberately not read.
+const LABELS: [keyof Notice, string][] = [
+  ["cnId", "CN ID"], ["agency", "Agency"], ["publishDate", "Publish Date"], ["category", "Category"],
+  ["executionDate", "Execution Date"], ["periodStart", "Contract Period"], ["extensionOptions", "Extension Options"],
+  ["maxEndDate", "Max End Date"], ["value", "Contract Value (AUD)"], ["description", "Description"],
+  ["procurementMethod", "Procurement Method"], ["limitedTenderExemption", "Limited Tender Exemption"], ["atmId", "ATM ID"],
+  ["sonId", "SON ID"],
+  ["australianBusiness", "Was an Australian business Engaged?"], ["smeEngaged", "Was an SME engaged?"],
+  ["smeReason", "Why wasn’t an SME engaged?"], ["smeReason", "Why wasn't an SME engaged?"], ["nzBusiness", "Was a New Zealand business engaged?"],
+  ["suppliersInvited", "Suppliers Invited"], ["confidentialContract", "Confidentiality - Contract"],
+  ["confidentialContractReason", "Confidentiality Reason(s) - Contract"], ["confidentialOutputs", "Confidentiality - Outputs"],
+  ["confidentialOutputsReason", "Confidentiality Reason(s) - Outputs"], ["consultancy", "Consultancy"],
+  ["agencyReferenceId", "Agency Reference ID"], ["supplierName", "Name"], ["supplierTown", "Town/City"],
+  ["supplierPostcode", "Postcode"], ["supplierState", "State/Territory"], ["supplierCountry", "Country"], ["supplierAbn", "ABN"],
+];
+
+const MONTHS: Record<string, string> = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+// "15-Sep-2026" -> "2026-09-15"
+const dmy = (s: string | null): string | null => {
+  const m = s?.match(/(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
+  return m && MONTHS[m[2].toLowerCase()] ? `${m[3]}-${MONTHS[m[2].toLowerCase()]}-${m[1].padStart(2, "0")}` : null;
+};
+const int = (s: string | null) => (s && /^\d+$/.test(s.trim()) ? Number(s) : null);
+
+export function parseNotice(html: string): Notice {
+  const lines = html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<[^>]+>/g, "\n")
+    .replace(/&amp;/g, "&").replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&nbsp;/g, " ")
+    .split("\n").map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const start = lines.findIndex((l) => /^CN ID:?$/i.test(l));
+  if (start < 0) throw new Error("Not a contract notice page");
+
+  const raw: Partial<Record<keyof Notice, string>> = {};
+  let current: keyof Notice | null = null;
+  let stop = false;
+  for (const line of lines.slice(start)) {
+    // The supplier block ends where the agency contact block begins.
+    if (current === "supplierAbn" && /^Agency Details$/i.test(line)) stop = true;
+    if (stop) break;
+    const hit = LABELS.find(([, label]) => line.toLowerCase().startsWith(label.toLowerCase() + ":") || line.toLowerCase() === label.toLowerCase());
+    if (hit) {
+      current = hit[0];
+      const rest = line.slice(hit[1].length).replace(/^:\s*/, "").trim();
+      raw[current] = rest;
+    } else if (current) {
+      raw[current] = raw[current] ? `${raw[current]} ${line}` : line;
+    }
+  }
+
+  const period = raw.periodStart?.match(/(\d{1,2}-[A-Za-z]{3}-\d{4})\s*to\s*(\d{1,2}-[A-Za-z]{3}-\d{4})/);
+  const money = raw.value?.replace(/[^0-9.]/g, "");
+  return {
+    cnId: raw.cnId ?? "",
+    agency: raw.agency ?? null,
+    publishDate: dmy(raw.publishDate ?? null),
+    category: raw.category ?? null,
+    executionDate: dmy(raw.executionDate ?? null),
+    periodStart: period ? dmy(period[1]) : null,
+    periodEnd: period ? dmy(period[2]) : null,
+    extensionOptions: int(raw.extensionOptions ?? null),
+    maxEndDate: dmy(raw.maxEndDate ?? null),
+    value: money ? Number(money) : null,
+    description: raw.description ?? null,
+    procurementMethod: raw.procurementMethod ?? null,
+    limitedTenderExemption: raw.limitedTenderExemption ?? null,
+    atmId: raw.atmId ?? null,
+    sonId: raw.sonId ?? null,
+    australianBusiness: raw.australianBusiness ?? null,
+    smeEngaged: raw.smeEngaged ?? null,
+    smeReason: raw.smeReason ?? null,
+    nzBusiness: raw.nzBusiness ?? null,
+    suppliersInvited: int(raw.suppliersInvited ?? null),
+    confidentialContract: raw.confidentialContract ?? null,
+    confidentialContractReason: raw.confidentialContractReason ?? null,
+    confidentialOutputs: raw.confidentialOutputs ?? null,
+    confidentialOutputsReason: raw.confidentialOutputsReason ?? null,
+    consultancy: raw.consultancy ?? null,
+    agencyReferenceId: raw.agencyReferenceId ?? null,
+    supplierName: raw.supplierName ?? null,
+    supplierTown: raw.supplierTown ?? null,
+    supplierPostcode: raw.supplierPostcode ?? null,
+    supplierState: raw.supplierState ?? null,
+    supplierCountry: raw.supplierCountry ?? null,
+    supplierAbn: raw.supplierAbn ?? null,
+  };
+}
+
+// Plain Node HTTPS, not Next's fetch: these pages are read during the build,
+// where an uncached fetch is refused and a cached one would keep 100 KB of HTML
+// per notice. A redirect to /System/NotFound means the id is unknown.
+function rawGet(url: string, hops = 0): Promise<{ status: number; body: string }> {
+  const https = (process as any).getBuiltinModule?.("node:https");
+  return new Promise((resolve, reject) => {
+    https.get(url, { headers: { "User-Agent": USER_AGENT } }, (res: any) => {
+      const to = res.headers.location as string | undefined;
+      if (res.statusCode >= 300 && res.statusCode < 400 && to) {
+        res.resume();
+        if (/NotFound/i.test(to)) return reject(new Error("AusTender has no page for this notice"));
+        if (hops >= 3) return reject(new Error("Too many redirects"));
+        return resolve(rawGet(new URL(to, url).toString(), hops + 1));
+      }
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk: string) => { body += chunk; });
+      res.on("end", () => resolve({ status: res.statusCode, body }));
+      res.on("error", reject);
+    }).on("error", reject);
+  });
+}
+
+export async function fetchNotice(pageId: string): Promise<Notice> {
+  const { status, body } = await rawGet(noticeUrl(pageId));
+  if (status !== 200) throw new Error(`AusTender returned ${status} for notice ${pageId}`);
+  return parseNotice(body);
 }
 
 function rank<T>(map: Map<string, T>, by: (t: T) => number, n: number) {

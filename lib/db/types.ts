@@ -2,8 +2,18 @@
 // today; a hosted store (Supabase/Postgres) only has to implement the same
 // methods and be returned from lib/db/index.ts.
 import type { Series, Point } from "../sources/types";
+import type { Contract, Notice } from "../sources/austender";
 
 export type CompanyRow = { abn: string; name: string; incomeYear: string; income: number; taxable: number; tax: number };
+
+// A contract as the API gives it, plus the notice page once it has been read.
+export type ContractRow = Contract & { pageId: string | null; notice: Notice | null; noticeReadAt: string | null };
+
+// A notice whose own fields disagree: flagged as an Australian business with an overseas address or no ABN.
+export type Contradiction = {
+  id: string; pageId: string | null; agency: string; supplier: string; value: number; description: string;
+  published: string; supplierCountry: string | null; supplierAbn: string | null; australianBusiness: string | null;
+};
 
 export type DbStats = {
   location: string;
@@ -11,6 +21,8 @@ export type DbStats = {
   observations: number;
   snapshots: number;
   companies: number;
+  contracts: number;
+  noticesRead: number;
   lastRun: { startedAt: string; finishedAt: string | null; ok: boolean; saved: number; failed: number } | null;
 };
 
@@ -27,6 +39,12 @@ export interface Store {
 
   // The Tax Office's full company list, kept whole so it can be joined to suppliers and grant recipients by ABN.
   saveCompanies(rows: CompanyRow[]): Promise<number>;
+
+  // Every contract notice, one row each, matching what tenders.gov.au shows once the notice has been read.
+  saveContracts(rows: Contract[]): Promise<{ added: number }>;
+  contractsWithoutNotice(limit: number): Promise<{ id: string; pageId: string }[]>;
+  saveNotice(id: string, notice: Notice): Promise<void>;
+  contradictions(limit: number): Promise<Contradiction[]>;
 
   startRun(): Promise<number>;
   finishRun(id: number, results: RunResult[]): Promise<void>;

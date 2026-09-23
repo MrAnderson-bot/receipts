@@ -203,6 +203,10 @@ export default async function Page() {
             <div><strong>{num(db.companies)}</strong><span>companies from the Tax Office list, keyed by ABN</span></div>
           </div>
           <p className="note" style={{ marginTop: 12 }}>
+            Contract notices stored one row each: {num(db.contracts)}, of which {num(db.noticesRead)} have had their public page read
+            for the fields the API leaves out (execution date, Australian business flag, confidentiality, extension options).
+          </p>
+          <p className="note" style={{ marginTop: 12 }}>
             {db.lastRun
               ? `Last snapshot ${new Date(db.lastRun.startedAt).toLocaleString("en-AU")}: ${db.lastRun.saved} sources saved${db.lastRun.failed ? `, ${db.lastRun.failed} failed` : ""}.`
               : "No snapshot has been taken yet. Run npm run snapshot."}

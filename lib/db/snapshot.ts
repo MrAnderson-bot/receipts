@@ -2,7 +2,7 @@
 // on its own, so one that is down doesn't stop the rest.
 import { getStore, type RunResult } from "./index";
 import { getIndicators } from "../economy";
-import { tryGetSummary, RANGES } from "../sources/austender";
+import { tryGetSummary, fetchNotice, RANGES } from "../sources/austender";
 import { tryGetGrants } from "../sources/grantconnect";
 import { tryGetRevenue } from "../sources/treasury";
 import { tryGetTaxByLevel } from "../sources/abs-tax";
@@ -92,10 +92,11 @@ export async function runSnapshot(): Promise<RunResult[]> {
 
   for (const days of RANGES) {
     await step(`contracts:${days}d`, async () => {
-      // The full contract list is large and already public; keep the summary without it.
+      // The summary is kept without the list; the list goes into the contracts table, one row each.
       const { contracts, ...summary } = need(await tryGetSummary(days));
       await store.saveSnapshot("contracts", `${days}d`, { ...summary, contractCount: contracts.length });
-      return `${contracts.length} contracts`;
+      const { added } = days === Math.max(...RANGES) ? await store.saveContracts(contracts) : { added: 0 };
+      return `${contracts.length} contracts${added ? `, ${added} new rows` : ""}`;
     });
     await step(`grants:${days}d`, async () => {
       const d = need(await tryGetGrants(days));
@@ -103,6 +104,25 @@ export async function runSnapshot(): Promise<RunResult[]> {
       return `${d.count} grants`;
     });
   }
+
+  // Read the notice page for contracts that don't have it yet, newest first. The API leaves out the
+  // fields the page shows, so this is what makes a stored record match the public one. Politely:
+  // two pages at a time, a pause between, and a budget per run (NOTICE_BUDGET, default 1500).
+  await step("contract-notices", async () => {
+    const budget = Number(process.env.NOTICE_BUDGET ?? 1500);
+    const todo = await store.contractsWithoutNotice(budget);
+    let read = 0, failed = 0, i = 0;
+    const errors: string[] = [];
+    await Promise.all([0, 1].map(async () => {
+      while (i < todo.length) {
+        const { id, pageId } = todo[i++];
+        try { await store.saveNotice(id, await fetchNotice(pageId)); read++; }
+        catch (e) { failed++; if (errors.length < 3) errors.push(`${id}: ${e instanceof Error ? e.message : e}`); }
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    }));
+    return `${read} read, ${failed} failed${errors.length ? ` (${errors.join("; ")})` : ""}, ${todo.length === budget ? "budget used" : "caught up"}`;
+  });
 
   // Migration: each file is its own step, and every series it yields is stored so revisions stay visible.
   const migration = await tryGetMigration();

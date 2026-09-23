@@ -190,16 +190,20 @@ arrive in the next Budget's tables). WA's newest open contract file is 2023-24. 
    (Cloudflare Pages: Edit, on the personal account) and the account id `2779902e70532b99496bfced7aa61ebf` into
    `/etc/receipts.env` on the VM, then `sudo systemctl start receipts-publish.service` and check the log. Until
    then, `npm run snapshot` on the dev machine keeps history accumulating.
-3. **Per-record tables, matching the government's records one-to-one.** Add `contracts` and `grants` tables holding
-   every field the publisher shows for a record, not the trimmed summary shape in `lib/sources/austender.ts`. For
-   AusTender that means everything on a tenders.gov.au contract notice page: execution date, extension options and
-   max end date, ATM ID, "Australian business engaged", "New Zealand business engaged", suppliers invited,
-   confidentiality flags and reasons, consultancy flag, agency reference ID, and the supplier's full address. The
-   OCDS API carries only some of these, so record which fields are web-only and find an honest way to get them
-   (a plain script fetch of a notice page returned the site shell without the record on 21 September 2026). The
-   goal is that a future AI agent has the full who, what, when, where and with whom for every record. Then the
-   **ABN cross-link**: join `companies` to suppliers and grant recipients by ABN to answer "which companies with no
-   tax payable hold government contracts, and for how much".
+3. **Per-record tables, matching the government's records one-to-one.** Done for contracts on 22 September 2026:
+   the `contracts` table holds one row per notice from the API, and the nightly job then reads each notice's public
+   page for the fields the API leaves out (execution date, extension options, max end date, ATM ID, "Australian
+   business engaged", "New Zealand business engaged", suppliers invited, confidentiality flags and reasons,
+   consultancy, agency reference ID, supplier town/state/country/ABN), storing the parsed fields in `n_*` columns and
+   the whole notice as JSON. The page id is the hex tail of the API's award id as a GUID
+   (`tenders.gov.au/Cn/Show/<guid>`); the contract number itself does not work. Reading is polite: two pages at a
+   time, 400 ms apart, at most `NOTICE_BUDGET` (default 1,500) per run, newest first, so the backlog of a 90-day
+   window (about 16,000) clears in under two weeks and a normal day's 150-200 new notices take a minute. Agency
+   contact names, phones and emails on the page are deliberately not read. The Contracts page lists notices whose
+   fields contradict each other ("Yes" to Australian business with an overseas address or no ABN): in the 90 days to
+   22 September 2026 there were 108, $182M, of which 65 with an overseas address, $139M, Cowater's $110M the largest.
+   Still to do: the same for **grants**, then the **ABN cross-link**: join `companies` to suppliers and grant
+   recipients by ABN to answer "which companies with no tax payable hold government contracts, and for how much".
 4. **Read history back into the pages**: revision markers on the economy charts, and "this figure a month ago" on
    contracts and grants, from `seriesHistory()` and `snapshots()`.
 5. **Fill the indicator gaps**, all available without keys: housing (dwelling values, approvals, lending, rents),

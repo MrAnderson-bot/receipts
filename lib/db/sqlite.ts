@@ -3,7 +3,8 @@
 import { mkdirSync } from "fs";
 import path from "path";
 import type { Series } from "../sources/types";
-import type { CompanyRow, DbStats, RunResult, Store } from "./types";
+import { noticePageId, type Contract, type Notice } from "../sources/austender";
+import type { CompanyRow, Contradiction, DbStats, RunResult, Store } from "./types";
 
 const FILE = path.join(process.cwd(), "data", "receipts.db");
 
@@ -32,6 +33,22 @@ CREATE TABLE IF NOT EXISTS companies (
   PRIMARY KEY (abn, name, income_year)
 );
 CREATE INDEX IF NOT EXISTS companies_by_abn ON companies (abn);
+CREATE TABLE IF NOT EXISTS contracts (
+  id TEXT PRIMARY KEY, award_id TEXT, page_id TEXT,
+  agency TEXT NOT NULL, supplier TEXT NOT NULL, supplier_abn TEXT, supplier_country TEXT,
+  value REAL NOT NULL, description TEXT NOT NULL, method TEXT NOT NULL, limited_reason TEXT,
+  category_code TEXT NOT NULL, category_name TEXT NOT NULL, unspsc TEXT,
+  start TEXT, end TEXT, published TEXT NOT NULL, late_days INTEGER,
+  first_seen TEXT NOT NULL, last_seen TEXT NOT NULL,
+  -- the notice page, filled in once read
+  notice_read_at TEXT, notice TEXT,
+  n_execution_date TEXT, n_extension_options INTEGER, n_max_end_date TEXT, n_atm_id TEXT,
+  n_australian_business TEXT, n_sme_engaged TEXT, n_nz_business TEXT, n_suppliers_invited INTEGER,
+  n_confidential_contract TEXT, n_confidential_outputs TEXT, n_consultancy TEXT, n_limited_exemption TEXT,
+  n_supplier_country TEXT, n_supplier_abn TEXT
+);
+CREATE INDEX IF NOT EXISTS contracts_unread ON contracts (notice_read_at, published);
+CREATE INDEX IF NOT EXISTS contracts_by_flag ON contracts (n_australian_business, value);
 CREATE TABLE IF NOT EXISTS runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, finished_at TEXT,
   ok INTEGER NOT NULL DEFAULT 0, saved INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0, detail TEXT
@@ -47,6 +64,12 @@ function open(): Database {
   const opened: Database = new sqlite.DatabaseSync(FILE);
   opened.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
   opened.exec(SCHEMA);
+  // CREATE TABLE IF NOT EXISTS leaves an existing table alone, so add any column the schema has gained since.
+  const wanted = SCHEMA.match(/CREATE TABLE IF NOT EXISTS contracts \(([\s\S]*?)\n\);/)?.[1] ?? "";
+  const have = new Set(opened.prepare("PRAGMA table_info(contracts)").all().map((c: any) => c.name));
+  for (const m of wanted.matchAll(/(?:^|,)\s*(?:--[^\n]*\n\s*)?(\w+)\s+(TEXT|REAL|INTEGER)/g)) {
+    if (!have.has(m[1])) opened.exec(`ALTER TABLE contracts ADD COLUMN ${m[1]} ${m[2]}`);
+  }
   db = opened;
   return opened;
 }
@@ -109,6 +132,57 @@ export const sqliteStore: Store = {
     return rows.length;
   },
 
+  async saveContracts(rows: Contract[]) {
+    const d = open();
+    const at = now();
+    const insert = d.prepare(`INSERT INTO contracts (id, award_id, page_id, agency, supplier, supplier_abn, supplier_country, value, description,
+        method, limited_reason, category_code, category_name, unspsc, start, end, published, late_days, first_seen, last_seen)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(id) DO UPDATE SET award_id = excluded.award_id, page_id = excluded.page_id, agency = excluded.agency,
+        supplier = excluded.supplier, supplier_abn = excluded.supplier_abn, supplier_country = excluded.supplier_country,
+        value = excluded.value, description = excluded.description, method = excluded.method, limited_reason = excluded.limited_reason,
+        category_code = excluded.category_code, category_name = excluded.category_name, unspsc = excluded.unspsc,
+        start = excluded.start, end = excluded.end, published = excluded.published, late_days = excluded.late_days, last_seen = excluded.last_seen`);
+    let added = 0;
+    d.exec("BEGIN");
+    try {
+      for (const c of rows) {
+        const r = insert.run(c.id, c.awardId, noticePageId(c.awardId), c.agency, c.supplier, c.supplierAbn, c.supplierCountry, c.value, c.description,
+          c.method, c.limitedReason, c.category.code, c.category.name, c.unspsc, c.start, c.end, c.published, c.lateDays, at, at);
+        // SQLite reports one change for an insert and one for an update; first_seen tells them apart.
+        if (d.prepare("SELECT first_seen = ? AS fresh FROM contracts WHERE id = ?").get(at, c.id)?.fresh && Number(r.changes) === 1) added++;
+      }
+      d.exec("COMMIT");
+    } catch (e) { d.exec("ROLLBACK"); throw e; }
+    return { added };
+  },
+
+  async contractsWithoutNotice(limit) {
+    return open().prepare(`SELECT id, page_id AS pageId FROM contracts WHERE notice_read_at IS NULL AND page_id IS NOT NULL
+      ORDER BY published DESC LIMIT ?`).all(limit);
+  },
+
+  async saveNotice(id, n: Notice) {
+    open().prepare(`UPDATE contracts SET notice_read_at = ?, notice = ?,
+        n_execution_date = ?, n_extension_options = ?, n_max_end_date = ?, n_atm_id = ?, n_australian_business = ?, n_sme_engaged = ?, n_nz_business = ?,
+        n_suppliers_invited = ?, n_confidential_contract = ?, n_confidential_outputs = ?, n_consultancy = ?, n_limited_exemption = ?,
+        n_supplier_country = ?, n_supplier_abn = ?
+      WHERE id = ?`)
+      .run(now(), JSON.stringify(n), n.executionDate, n.extensionOptions, n.maxEndDate, n.atmId, n.australianBusiness, n.smeEngaged, n.nzBusiness,
+        n.suppliersInvited, n.confidentialContract, n.confidentialOutputs, n.consultancy, n.limitedTenderExemption,
+        n.supplierCountry, n.supplierAbn, id);
+  },
+
+  async contradictions(limit): Promise<Contradiction[]> {
+    // "Yes" to an Australian business, on a notice whose own supplier block says overseas or no ABN.
+    return open().prepare(`SELECT id, page_id AS pageId, agency, supplier, value, description, published,
+        n_supplier_country AS supplierCountry, n_supplier_abn AS supplierAbn, n_australian_business AS australianBusiness
+      FROM contracts
+      WHERE n_australian_business LIKE 'Yes%'
+        AND (n_supplier_abn IS NULL OR n_supplier_abn NOT GLOB '*[0-9]*' OR (n_supplier_country IS NOT NULL AND UPPER(n_supplier_country) <> 'AUSTRALIA'))
+      ORDER BY value DESC LIMIT ?`).all(limit);
+  },
+
   async startRun() {
     return Number(open().prepare("INSERT INTO runs (started_at) VALUES (?)").run(now()).lastInsertRowid);
   },
@@ -126,6 +200,7 @@ export const sqliteStore: Store = {
     return {
       location: path.relative(process.cwd(), FILE).replace(/\\/g, "/"),
       series: count("series"), observations: count("observations"), snapshots: count("snapshots"), companies: count("companies"),
+      contracts: count("contracts"), noticesRead: count("contracts WHERE notice_read_at IS NOT NULL"),
       lastRun: run ? { startedAt: run.started_at, finishedAt: run.finished_at, ok: !!run.ok, saved: run.saved, failed: run.failed } : null,
     };
   },
