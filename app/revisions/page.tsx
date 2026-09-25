@@ -161,7 +161,7 @@ export default async function Page() {
                   {growth.slice(0, 40).map((g) => {
                     const pageId = noticePageId(g.awardId);
                     return (
-                      <tr key={g.id}>
+                      <tr key={`${g.id}|${g.published}`}>
                         <td>
                           {pageId ? <a href={noticeUrl(pageId)} target="_blank" rel="noreferrer">{g.id}</a> : g.id}
                           <div className="desc">{g.description}</div>

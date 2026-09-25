@@ -340,9 +340,13 @@ export async function getSummary(days: number): Promise<Summary> {
   const seen = new Map<string, Contract>();
   let amendments = 0;
   const amended: Amendment[] = [];
+  const seenAmendments = new Set<string>(); // the API can return a notice more than once in a window
   for (const rel of releases) {
     for (const c of toContracts(rel)) {
       if (c.amendment) {
+        const key = `${c.id}|${c.published}`;
+        if (seenAmendments.has(key)) continue;
+        seenAmendments.add(key);
         amendments++;
         amended.push({
           id: c.id, baseId: c.id.replace(/-A\d+$/i, ""), awardId: c.awardId, agency: c.agency, supplier: c.supplier,
