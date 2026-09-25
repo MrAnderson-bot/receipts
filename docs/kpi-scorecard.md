@@ -105,6 +105,30 @@ earlier", which needs a year of stored `snapshots` rows. The nightly job has sto
 summary since 22 September 2026, so from late September 2027 switch both to year-on-year and record the change
 here.
 
+### Response: is planned spending growing at least as fast as the pressure it answers?
+
+Added 25 September 2026 at the owner's request: "does the government's allocation look appropriate given the crisis
+at home". The allocation is the latest Budget's expenses by function, read as the Budget year against the Budget's
+own estimate for the year before. Both are estimates: this is the one group that reads them, because an allocation
+is a plan by definition, and the method text says so. The pressure is the latest twelve-month growth in the figure
+that measures the problem. Met when the plan grows at least as fast as the pressure; a falling pressure is met by
+any allocation. All five are yardsticks; the government publishes no allocation targets of this kind.
+
+| Indicator | Allocation (Budget function) | Pressure | Data |
+|---|---|---|---|
+| Housing spending keeping pace with rents | Housing and community amenities | CPI rents, latest twelve months | have `cpi-rents`; Budget functions from `budget.ts` |
+| Welfare spending keeping pace with prices | Social security and welfare | Headline CPI, latest twelve months | have `cpi` |
+| Housing spending keeping pace with homelessness | Housing and community amenities | People helped by specialist homelessness services, latest financial year on the one before (AIHW) | have `homelessness:shs-clients:AUS`, passed in by the page from the homelessness loader |
+| Public order spending keeping pace with offending | Public order and safety | Offenders per 100,000 people, latest financial year on the one before (ABS). The ABS publishes no national total of victims across offences | have `crime:offender-rate:AUS:total`, passed in from the crime loader |
+| Energy spending keeping pace with power and fuel bills | Fuel and energy | The fastest-rising of CPI electricity, gas and automotive fuel, latest twelve months | have all three |
+
+Known limits, to say on the page if asked: a function is broader than the crisis (housing and community amenities
+includes water and sewerage; fuel and energy is mostly fuel tax credits and rebates, so it swings with rebate
+timing, which is why it read −20.6% for 2026-27 on the day this was built); the Budget year's figure is a plan
+that will be revised; and a growth comparison says nothing about whether the base level was right. The Response
+group is a direction test, not an adequacy test. When the ABS Government Finance Statistics actuals by purpose are
+loaded (backfill unit 2) the same rules can be run over actual spending as a second view.
+
 ## Backfill and history
 
 The scorecard reads live sources, so every rule works from the first day: each rule needs only the latest
@@ -134,10 +158,12 @@ Budget snapshot only shows how the *estimates* have moved since 22 September 202
 | SME share of contracts | A published target: 20% of contracts by value to SMEs, 35% for contracts under $20M | AusTender doesn't flag SMEs in the API or notice page; the Finance procurement statistics publication does, yearly | New source, yearly only |
 | Bulk-billing rate | The most-quoted health affordability figure | Department of Health quarterly Medicare statistics | New source module |
 | State budgets and debt | The scorecard is Commonwealth-only above the ABS public-sector totals | ABS Government Finance Statistics (in the Data API) | Medium |
-| Homelessness and crime | Already on `/crime`, yearly; a direction rule is easy | Have (AIHW, ABS) | Small, add when the yearly release lands |
+| Homelessness and crime as outcomes | The Response group reads them as pressures; a direction rule on the outcomes themselves (fewer people needing services, fewer offenders) is still to add | Have (AIHW, ABS) | Small |
 | Energy bills in dollars | CPI electricity is a growth rate; a dollar figure is what people feel | AER default market offer (yearly) | New source, yearly |
 
 ## Changes to the rules
 
 - 25 September 2026: first version. Thresholds: inflation 2 to 3%; Accord 240,000 a year; household size 2.5;
   real payments growth 2%; late notices 5%; limited tender 25%.
+- 25 September 2026: Response group added, five rules, no thresholds (met when allocation growth is at least the
+  pressure's growth). First reading: 4 of 5 met; fuel and energy missed (−20.6% against electricity +6.1%).

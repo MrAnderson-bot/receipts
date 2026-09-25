@@ -58,6 +58,12 @@ export const SCORECARD_INPUTS = [
   "gdp-per-capita", "unemployment", "participation", "underemployment", "productivity",
   "gross-debt-share-gdp", "public-investment-share",
 ];
+// Series the Response group reads that come from the crime and homelessness loaders, not the indicator list.
+// The page passes them in as extra series.
+export const SCORECARD_EXTRA_IDS = ["homelessness:shs-clients:AUS", "crime:offender-rate:AUS:total"];
+const WORDS = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+// "2026-27" -> "2025-26"
+const previousYear = (fy: string) => { const y = Number(fy.slice(0, 4)) - 1; return `${y}-${String(y + 1).slice(2)}`; };
 
 // The National Housing Accord: 1.2 million new well-located homes over five years from 1 July 2024.
 export const ACCORD = { homes: 1_200_000, years: 5, from: "2024-Q3", perYear: 240_000, perQuarter: 60_000 };
@@ -91,8 +97,9 @@ function lastActuals(series: YearValue[]): [YearValue, YearValue] | null {
   return actual.length >= 2 ? [actual[actual.length - 2], actual[actual.length - 1]] : null;
 }
 
-export function scorecard(results: SeriesResult[], budget: Budget | null, contracts: Summary | null): Scorecard {
+export function scorecard(results: SeriesResult[], budget: Budget | null, contracts: Summary | null, extra: Series[] = []): Scorecard {
   const byId = new Map(results.filter((r) => r.series?.points.length).map((r) => [r.id, r.series!]));
+  for (const x of extra) if (x.points.length) byId.set(x.id, x);
   const s = (id: string) => byId.get(id) ?? null;
 
   // Reads a series a year apart. `better` says which direction counts as met.
@@ -304,6 +311,73 @@ export function scorecard(results: SeriesResult[], budget: Budget | null, contra
     { id: "capital", name: "Commonwealth net capital investment not falling", basis: "yardstick", href: "/budget", rule: "Met when the Commonwealth's net capital investment as a share of GDP in the latest final-outcome year was at least the year before's. Net of depreciation, so it shows whether the asset base is growing.", read: budgetRule((b) => b.netCapitalInvestmentShare, "higher") },
   ];
 
+  // Response: does planned spending follow the pressure? The allocation is the latest Budget's expenses by
+  // function, the Budget year against the Budget's own estimate for the year before. Both are estimates, which
+  // is the one place the scorecard reads them: an allocation is a plan by definition. The pressure is the latest
+  // twelve-month growth in the figure that measures the problem. Met when the plan grows at least as fast.
+  const allocation = (fn: RegExp) => {
+    if (!budget) return null;
+    const f = budget.functions.find((x) => fn.test(x.name));
+    const now = f?.series.find((p) => p.year === budget.budgetYear), prev = f?.series.find((p) => p.year === previousYear(budget.budgetYear));
+    if (!f || !now || !prev || !prev.value) return null;
+    return { name: f.name, now, prev, growth: (now.value / prev.value - 1) * 100 };
+  };
+  type Pressure = { label: string; growth: number; asOf: string };
+  // A monthly or quarterly series already expressed as growth on a year earlier.
+  const rate = (id: string, label: string) => (): Pressure | null => { const x = s(id); if (!x) return null; const v = last(x); return { label, growth: v.value, asOf: period(v.period) }; };
+  // A yearly count: growth of the latest year on the one before.
+  const yearly = (id: string, label: string) => (): Pressure | null => {
+    const x = s(id); if (!x || x.points.length < 2) return null;
+    const [prev, now] = x.points.slice(-2);
+    if (!prev.value) return null;
+    return { label: `${label}, ${period(now.period)} on ${period(prev.period)}`, growth: (now.value / prev.value - 1) * 100, asOf: period(now.period) };
+  };
+  // The fastest-rising of several rates.
+  const fastest = (parts: [string, string][]) => (): Pressure | null => {
+    const read = parts.map(([id, label]) => rate(id, label)());
+    if (read.some((r) => !r)) return null;
+    return read.reduce((a, b) => (b!.growth > a!.growth ? b : a))!;
+  };
+  const responseRule = (fn: RegExp, pressure: () => Pressure | null) => (): Reading | null => {
+    const a = allocation(fn), p = pressure();
+    if (!a || !p) return null;
+    const gap = p.growth - a.growth;
+    return {
+      ok: a.growth >= p.growth,
+      reading: `${a.name} ${signed(a.growth)}% (${money(a.prev.value * 1e6)} in ${a.prev.year} to ${money(a.now.value * 1e6)} in ${a.now.year}); ${p.label} ${signed(p.growth)}%`,
+      asOf: `${a.now.year} Budget; ${p.asOf}`,
+      toMeet: `${a.name} needs ${pts(gap)} more growth: about ${money(a.prev.value * 1e6 * gap / 100)} more in ${a.now.year}`,
+    };
+  };
+  const ESTIMATES = "The allocation is the latest Budget's expenses by function: the Budget year against the Budget's own estimate for the year before, so both are estimates, unlike the other Budget rules. No published target.";
+  const response: Spec[] = [
+    {
+      id: "response-housing", name: "Housing spending keeping pace with rents", basis: "yardstick", href: "/budget",
+      rule: `Met when planned spending on housing and community amenities grows at least as fast as rents (CPI rents over the latest twelve months). ${ESTIMATES}`,
+      read: responseRule(/^housing/i, rate("cpi-rents", "rents")),
+    },
+    {
+      id: "response-cost-of-living", name: "Welfare spending keeping pace with prices", basis: "yardstick", href: "/budget",
+      rule: `Met when planned spending on social security and welfare grows at least as fast as the CPI over the latest twelve months, so payments are not shrinking in real terms. ${ESTIMATES}`,
+      read: responseRule(/^social security/i, rate("cpi", "prices")),
+    },
+    {
+      id: "response-homelessness", name: "Housing spending keeping pace with homelessness", basis: "yardstick", href: "/crime#homelessness",
+      rule: `Met when planned spending on housing and community amenities grows at least as fast as the number of people helped by specialist homelessness services (AIHW, latest financial year on the one before). ${ESTIMATES}`,
+      read: responseRule(/^housing/i, yearly("homelessness:shs-clients:AUS", "people helped by homelessness services")),
+    },
+    {
+      id: "response-crime", name: "Public order spending keeping pace with offending", basis: "yardstick", href: "/crime",
+      rule: `Met when planned spending on public order and safety grows at least as fast as offenders per 100,000 people (ABS Recorded Crime, latest financial year on the one before). The ABS publishes no national total of victims across offences, so the offender rate is the pressure figure. ${ESTIMATES}`,
+      read: responseRule(/^public order/i, yearly("crime:offender-rate:AUS:total", "offenders per 100,000")),
+    },
+    {
+      id: "response-energy", name: "Energy spending keeping pace with power and fuel bills", basis: "yardstick", href: "/budget",
+      rule: `Met when planned spending on fuel and energy grows at least as fast as the fastest-rising of electricity, gas and automotive fuel in the CPI over the latest twelve months. ${ESTIMATES}`,
+      read: responseRule(/^fuel and energy/i, fastest([["cpi-electricity", "electricity"], ["cpi-gas", "gas"], ["cpi-fuel", "fuel"]])),
+    },
+  ];
+
   const procurement: Spec[] = [
     {
       id: "late", name: "Contracts reported on time", basis: "yardstick", href: "/spending/90",
@@ -334,6 +408,7 @@ export function scorecard(results: SeriesResult[], budget: Budget | null, contra
     { id: "fiscal", name: "Budget and debt", question: "Is the budget position improving, as the fiscal strategy says it should?", specs: fiscal },
     { id: "investment", name: "Investment", question: "Is the public sector building its asset base, not running it down?", specs: investment },
     { id: "procurement", name: "Procurement", question: "Is public money spent through open competition and reported on time?", specs: procurement },
+    { id: "response", name: "Response", question: "Is planned spending growing at least as fast as the pressure it answers?", specs: response },
   ];
 
   const missing: string[] = [];
@@ -362,9 +437,10 @@ export function scorecard(results: SeriesResult[], budget: Budget | null, contra
     score: score(met, scored),
     targetsScore: score(targets.filter((k) => k.status === "met").length, targets.length),
     method:
-      `${total} indicators in six groups, each a fixed rule over an official figure, printed next to its result. ` +
+      `${total} indicators in ${WORDS[groups.length] ?? groups.length} groups, each a fixed rule over an official figure, printed next to its result. ` +
       "Where the government has published a target the rule is that target; otherwise it is a stated yardstick, and the two are marked apart. " +
       "The score out of 100 is the share of readable rules that are met, every rule counting the same. Nothing else goes into it: no weights, no probability, " +
-      "and an indicator that didn't load is left out of the count rather than assumed either way. Budget rules read final outcomes only, never estimates.",
+      "and an indicator that didn't load is left out of the count rather than assumed either way. Budget rules read final outcomes only, never estimates, " +
+      "except the Response group, which reads the latest Budget's planned spending by function because an allocation is a plan.",
   };
 }

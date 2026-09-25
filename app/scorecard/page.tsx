@@ -3,7 +3,9 @@ import Link from "next/link";
 import { getIndicators } from "@/lib/economy";
 import { tryGetBudget } from "@/lib/sources/budget";
 import { tryGetSummary } from "@/lib/sources/austender";
-import { scorecard, SCORECARD_INPUTS, ACCORD } from "@/lib/scorecard";
+import { tryGetHomelessness } from "@/lib/sources/homelessness";
+import { tryGetCrime } from "@/lib/sources/crime";
+import { scorecard, SCORECARD_INPUTS, SCORECARD_EXTRA_IDS, ACCORD } from "@/lib/scorecard";
 
 export const revalidate = 3600;
 export const metadata: Metadata = { title: "Scorecard" };
@@ -15,8 +17,12 @@ const outOf = (n: number | null) => (n === null ? "–" : `${n} / 100`);
 const list = (names: string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
 
 export default async function Page() {
-  const [results, budget, contracts] = await Promise.all([getIndicators(SCORECARD_INPUTS), tryGetBudget(), tryGetSummary(90)]);
-  const card = scorecard(results, budget.data, contracts.data);
+  const [results, budget, contracts, homelessness, crime] = await Promise.all([
+    getIndicators(SCORECARD_INPUTS), tryGetBudget(), tryGetSummary(90), tryGetHomelessness(), tryGetCrime(),
+  ]);
+  // The Response group reads two yearly series that come from the crime and homelessness loaders.
+  const extra = [...(homelessness.shs.data?.series ?? []), ...(crime.offenders.data?.series ?? [])].filter((s) => SCORECARD_EXTRA_IDS.includes(s.id));
+  const card = scorecard(results, budget.data, contracts.data, extra);
   const scoredPillars = card.pillars.filter((p) => p.score !== null);
   const weakest = [...scoredPillars].sort((a, b) => a.score! - b.score!);
   const lowest = weakest.filter((p) => p.score === weakest[0]?.score);
@@ -29,7 +35,8 @@ export default async function Page() {
         <h1>Government scorecard</h1>
         <p>
           {card.total} indicators of how the country is going on affordability, housing, jobs, the budget,
-          investment and procurement, each read from an official figure against a fixed, printed rule.
+          investment, procurement and whether planned spending follows the pressure at home, each read from an
+          official figure against a fixed, printed rule.
           Where the government has set a target, the rule is that target. Where it hasn’t, the rule is
           a yardstick of ours, marked as such, and you can disagree with it.
         </p>
