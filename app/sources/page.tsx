@@ -16,6 +16,7 @@ import { tryGetFuel, FUEL_CODES, keyNeeded, NOT_CONNECTED as FUEL_NOT_CONNECTED 
 import { tryGetAssetSales } from "@/lib/sources/finance-sales";
 import { tryGetParliament, NO_KEY } from "@/lib/sources/tvfy";
 import { tryGetAps } from "@/lib/sources/apsc";
+import { tryGetExpenses } from "@/lib/sources/ipea";
 import { getStore, type DbStats } from "@/lib/db";
 import { num } from "@/lib/format";
 
@@ -48,6 +49,7 @@ export default async function Page() {
   ]);
   const fuel = await Promise.all(FUEL_CODES.map((c) => tryGetFuel(c)));
   const ags = indicators.find((r) => r.id === "ags-on-issue");
+  const expenses = await tryGetExpenses();
   const okIds = new Set(indicators.filter((r) => r.series).map((r) => r.id));
   const count = (ids: string[]) => `${ids.filter((id) => okIds.has(id)).length} of ${ids.length} series answering`;
   const absIds = ABS_SERIES.map((s) => s.id);
@@ -85,6 +87,14 @@ export default async function Page() {
       licence: "CC BY 3.0 AU",
       ok: !!grants.data,
       status: grants.data ? `${num(grants.data.count)} grants in the last 7 days` : `Not answering. ${grants.error}`,
+    },
+    {
+      name: "IPEA, parliamentarians' expenditure reports on data.gov.au",
+      url: "https://data.gov.au/data/organization/ipea",
+      gives: "every work expense line for current and former parliamentarians: person, party, electorate, category, dates, locations, amount",
+      licence: expenses.data?.latest.licence ?? "CC BY",
+      ok: !!expenses.data,
+      status: expenses.data ? `${num(expenses.data.latest.rows)} expense lines, ${expenses.data.latest.period}` : `Not answering. ${expenses.error}`,
     },
     {
       name: "Treasury, Budget Paper No. 1, Statement 5",
@@ -293,6 +303,7 @@ export default async function Page() {
             Fuel prices held for today: {num(db.fuelPrices)}, one per station and fuel, replaced each day; state-level medians
             are kept daily as snapshots.
             APS headcount cells stored one row each: {num(db.apsRows)} across {num(db.apsReleases)} snapshots.
+            Parliamentarians’ expense lines stored one row each, every column as IPEA published it: {num(db.expenses)}.
           </p>
           <p className="note" style={{ marginTop: 12 }}>
             {db.lastRun
