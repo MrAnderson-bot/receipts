@@ -251,6 +251,49 @@ the loop runs the rest and finishes on its own.
    Queensland since 2018, WA since 2001), each state's in its own layout, so one parser per state and hundreds of
    small units. Lowest value of the three; do last, if at all.
 
+## For tomorrow: actual expenditure, and what the AusTender audit found (written 25 September 2026)
+
+AusTender values are ceilings, not spend; Finance says so in RMG-423. Two sources publish what was actually paid,
+both tested by script today, both free of logins and keys. Details, the API call and the table names are in
+`docs/actual-expenditure-sources.md`.
+
+1. **Finance monthly financial statements.** One HTML page a month with actual, year-to-date, Budget profile and
+   full-year estimate for every line of the operating statement. Latest: May 2026. **Suggested first**: one parser,
+   one page a day, and the Budget page gets "spent so far against plan".
+2. **Transparency Portal annual-report tables.** A public POST API returns, per entity and year, actual dollars paid
+   on consultancy and non-consultancy contracts and the organisations paid, with ABNs. Never fetch it unfiltered
+   (60 MB, the server cuts it off). Joined by ABN to `contract_releases` and `companies` this gives commitment
+   versus payment per supplier and agency. **Check the portal's licence first.**
+3. **From the audit** (`docs/query-audit.md`): the live 90-day query still reads `contractPublished` and so
+   undercounts amendments about eighty to one; switch it to `contractLastModified`. The notice-page parser needs
+   the four missing labels ("Limited Tender Condition", "Original", "Amendments", "Supplier Details") and should keep
+   the ATM and SON GUIDs, then re-read the 3,677 damaged pages. Grants read 14 of 32 report columns.
+4. **Reading rules to keep in mind** (README, "Things to know about the AusTender data"): the first value is the
+   initial term only, an amendment restates the whole total, and "active" never means running.
+5. **Say it on the page.** Worked example from 25 September 2026: the 50 Marcus Clarke St leases (CN4265574, CN4265580)
+   read as one lease renewed at 14 times the price with two landlords paid at once. They are two consecutive leases,
+   the 2010 one first reported on 31 July 2026 (sixteen years late; the site's own search finds no earlier notice, only
+   the 2009 fitout contract with the same ABN), each amended the same day from initial-term to whole-of-term value.
+   Add plain-words flags next to a row: "amended on the day it was published", "published N years after it
+   started", "period ended on <date>". The Revisions page should say an amendment restates the total.
+6. **The API has nothing before 2013.** `findById/CN188534` (published May 2009) returns no releases. The backfill plan
+   says notices go back to 2007; before 2013 they exist only as site pages, so the pre-2013 units need the page route.
+7. **Senate Order lists: each agency's own statement of its current contracts.** AusTender publishes them twice a
+   year (financial and calendar year) at `/senateorder/list`, one spreadsheet per agency at
+   `/SenateOrder/Download?AgencyId=<guid>` (the guid is in the list page's links; DEWR's is
+   `9327e6fc-1f61-4556-8fb6-7d0a3c651b33`, the same id as its OCDS party id). Every contract of $100,000 or more
+   active in the period, with CN id, supplier, ABN, description, category, confidentiality flags, publish, start and
+   end dates (Excel serials) and value; a statistics block on top. Tested 25 September 2026: DEWR 2025-26 has 1,133
+   rows, and it settled the Marcus Clarke question (only the 2021 lease is listed as current). Worth a table,
+   `senate_order_contracts`, keyed by agency, period and CN id: it is the only per-agency "current" view AusTender
+   gives, and joins straight to `contract_releases`.
+8. **The site search reaches what the API can't.** `/Search/KeywordSearch?keyword=<quoted phrase>&Page=N` returns
+   15 records a page across ATMs, CNs and SONs back to 2007, with each record's GUID link, and the CN pages from 2009
+   read with the existing parser. That is the route for pre-2013 notices (item 6) and for "every notice mentioning
+   this address or supplier". The advanced CN search form (`/cn/search`, fields Keyword, SupplierName, SupplierAbn,
+   dateType, dateStart, dateEnd, ValueFrom, ValueTo) did not return results to a plain GET; work out its parameters
+   before relying on it.
+
 ## What to do next, in order
 
 1. ~~Put it in git~~ Done: https://github.com/MrAnderson-bot/receipts, AGPLv3.

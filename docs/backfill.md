@@ -190,3 +190,10 @@ Everything else in this document is CC BY 4.0 or an equivalent government licenc
 Record here, with the date, when each unit family starts and finishes, and any change to the plan.
 
 - 25 September 2026: plan written. Nothing started.
+- 25 September 2026: `contracts:FY2025-26` started, the first unit run. `npm run backfill -- <unit>` (plain Node, resumable,
+  `backfill_progress` table). It reads `contractLastModified` in 7-day windows, newest first, into the new `contract_releases`
+  table (one row per release, every API field; see `docs/query-audit.md`), and the original notices into `contracts`.
+- 25 September 2026: `contracts:FY2025-26` done in 46 minutes, 1,318 API calls: 123,770 release rows (76,137 original
+  notices, 47,633 amendments across 22,331 contracts). The database grew from 138 MB to 725 MB, about twice the plan's
+  estimate per year, because each amendment repeats the whole release JSON. Decide before the next year whether to keep
+  the `release` JSON column (every field already has its own column) or budget the disk for it.

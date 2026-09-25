@@ -221,6 +221,16 @@ To add a state, write a loader that returns `StateSummary` and add it to `LOADER
   reliably; `contractPublished` files them under the original publish date. `contracts[].dateSigned` equals the publish
   timestamp on an original notice and the original publish date on an amendment (see `docs/query-audit.md`).
 
+- **Reading the figures, per Finance's RMG-423 (Contracting & reporting page).** A notice's value is the contract's potential
+  maximum, not spend: "AusTender does not, and is not intended to, reflect actual government expenditure." The first value
+  reported is the initial term only; options, extensions and renewals that move it by $10,000 or more are reported later as an
+  amendment to the same CN, and an amendment restates the whole total, not the increase. Term changes need not be reported, so
+  the end date often stays put; "max end date" is the ceiling. So a value that jumps ten-fold under the reason "execution of
+  option, extension, renewal" is the prescribed two-step, not an error, and amendments must never be added to originals.
+- **"active" never means "running".** OCDS has a "terminated" status; AusTender never uses it (none in 123,770 stored releases).
+  Only "active" and "cancelled" occur, and nothing in RMG-423 closes a notice when a contract ends. Judge "ended" from the
+  period end date, not the status. Consecutive leases of one building with different landlords are two notices, not double counting.
+
 ## Check before posting figures
 
 Open a few contracts from the tables and compare them with tenders.gov.au. Every contract ID on
