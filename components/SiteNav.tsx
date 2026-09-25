@@ -14,6 +14,7 @@ const LINKS = [
   { href: "/grants", label: "Grants" },
   { href: "/states", label: "States" },
   { href: "/migration", label: "Migration" },
+  { href: "/government", label: "Government" },
   { href: "/sources", label: "Sources" },
 ];
 

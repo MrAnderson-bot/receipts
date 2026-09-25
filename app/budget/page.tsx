@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { tryGetBudget } from "@/lib/sources/budget";
+import { tryGetAgs } from "@/lib/sources/aofm";
 import type { YearValue } from "@/lib/sources/treasury";
 import type { Series } from "@/lib/sources/types";
-import { money, pct } from "@/lib/format";
+import { money, pct, period } from "@/lib/format";
 import { LineChart } from "@/components/LineChart";
 
 export const revalidate = 86_400;
@@ -13,7 +14,8 @@ const at = (s: YearValue[], year: string) => s.find((p) => p.year === year)?.val
 const signedMoney = (n: number) => `${n < 0 ? "−" : ""}${money(Math.abs(n))}`;
 
 export default async function Page() {
-  const { data: b, error } = await tryGetBudget();
+  const [{ data: b, error }, ags] = await Promise.all([tryGetBudget(), tryGetAgs()]);
+  const agsLatest = ags.data ? ags.data.points[ags.data.points.length - 1] : null;
   if (!b) {
     return (
       <section className="error">
@@ -48,7 +50,7 @@ export default async function Page() {
         </p>
       </section>
 
-      <section className="figures" aria-label="Totals">
+      <section className="figures four" aria-label="Totals">
         <div>
           <strong>{estimates[0] ? signedMoney(estimates[0].value * M) : "n/a"}</strong>
           <span>{estimates[0] ? `is the Budget’s estimated balance for ${estimates[0].year}` : "no estimate published"}</span>
@@ -60,6 +62,14 @@ export default async function Page() {
         <div>
           <strong>{money(at(b.netInterest, year) * M)}</strong>
           <span>paid in net interest on that debt during {year}</span>
+        </div>
+        <div>
+          <strong>{agsLatest ? money(agsLatest.value) : "n/a"}</strong>
+          <span>
+            {agsLatest
+              ? `in government securities on issue at ${period(agsLatest.period)}: the gross debt, before financial assets are netted off, updated monthly by the AOFM`
+              : `gross debt not available. ${ags.error}`}
+          </span>
         </div>
       </section>
 
@@ -96,6 +106,14 @@ export default async function Page() {
             <LineChart series={series("debt", "Net debt as a share of GDP", "%", b.netDebtShare, 1)} />
             <p className="note">What the Commonwealth owes, less the financial assets it could sell to repay it.</p>
           </article>
+          {ags.data && (
+            <article className="card" id="ags-on-issue">
+              <h3>Government securities on issue</h3>
+              <LineChart series={ags.data} />
+              <p className="note">{ags.data.note}</p>
+              <p className="src"><a href={ags.data.sourceUrl} target="_blank" rel="noreferrer">{ags.data.source}</a></p>
+            </article>
+          )}
         </div>
       </section>
 

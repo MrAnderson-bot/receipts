@@ -31,6 +31,7 @@ Needs Node 22.5 or later. See `HANDOVER.md` for project status, the database, ho
 - `/grants`: Commonwealth grant awards by category, selection process, agency, recipient and state (`/grants/7`, `/grants/90`)
 - `/states`: state and territory contracts (`/states/VIC`, `/states/QLD` and so on; NSW by default), plus the state with no usable data and why
 - `/migration`: net overseas migration (ABS), temporary visa holders by category, permanent Migration Program outcomes, skilled and working holiday visas granted, NOM by visa category and new citizens by former citizenship (Home Affairs)
+- `/government`: size of the Australian Public Service: headcount at the latest half-yearly snapshot, change on the last one and a year ago, split by gender and classification level, the 15 largest agencies, and totals by gender back to 2006 (APSC)
 - `/sources`: every feed, its licence, whether it answered, and what isn't connected yet
 
 ## Database
@@ -59,6 +60,8 @@ One module per source in `lib/sources`, all returning the shapes in `lib/sources
 | `states/nt.ts` | NT tenders site export of awarded contracts (xlsx), listed on data.nt.gov.au | state contracts, last 12 months |
 | `states/tas.ts` | Tasmanian tenders site, awarded list plus one page per contract (HTML) | state contracts, rolling 30 days |
 | `states/act.ts` | ACT Notifiable Invoices Register on data.act.gov.au (Socrata API, CC BY 4.0) | invoices of $25,000 and over, last 12 months |
+| `apsc.ts` | APS Employment Database releases on data.gov.au, xlsx (CC BY 3.0 AU) | APS headcount by agency, gender and classification per half-yearly snapshot; totals by gender since 2006 |
+| `aofm.ts` | AOFM data hub, Register of Government Borrowings and portfolio executive summary, xlsx (CC BY 4.0) | Australian Government Securities on issue, face value, monthly since 2010 |
 | `states/wa.ts` | Tenders WA award CSV on data.wa.gov.au (CC BY 4.0) | state contracts, latest released financial year |
 | `ato-transparency.ts` | ATO Corporate Tax Transparency on data.gov.au, xlsx (CC BY 3.0 AU) | each large company's total income, taxable income, tax payable |
 | `abs-profits.ts` | ABS Business Indicators via the Data API (CC BY 4.0) | company gross operating profits by industry, quarterly |

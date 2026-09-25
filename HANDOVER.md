@@ -40,6 +40,7 @@ and `docs/launch-tools/` are owner-only and git-ignored.
 | `/grants` | Commonwealth grant awards (same ranges) |
 | `/states` | NSW, VIC, QLD, WA, NT, TAS contracts and ACT invoices. `/states/QLD` etc. |
 | `/migration` | Net overseas migration, temporary visa holders, permanent program, skilled and working holiday grants, citizenship by country |
+| `/government` | APS headcount from the APSC's half-yearly releases on data.gov.au: total and change, by gender and level, 15 largest agencies, twenty-year history. Every cell of the agency table is stored in `aps_headcount`. Gross debt (AOFM securities on issue) is on `/budget` |
 | `/sources` | Every feed with live status, database totals, and what isn't connected |
 
 ## How the code is laid out

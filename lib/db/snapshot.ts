@@ -11,6 +11,7 @@ import { tryGetTransparency, loadAllEntities } from "../sources/ato-transparency
 import { tryGetProfits } from "../sources/abs-profits";
 import { tryGetState, STATE_CODES } from "../sources/states";
 import { tryGetMigration } from "../sources/migration";
+import { loadAps } from "../sources/apsc";
 import type { Series } from "../sources/types";
 import type { YearValue } from "../sources/treasury";
 
@@ -143,6 +144,16 @@ export async function runSnapshot(): Promise<RunResult[]> {
       return `${series.length} series, ${key}`;
     });
   }
+
+  // APS headcount: every cell of the agency-by-gender-by-classification table, one row each, plus the twenty-year totals.
+  await step("aps", async () => {
+    const d = await loadAps(); // uncached: the rows are too big for the page cache
+    const { added } = await store.saveApsHeadcount(d.rows);
+    for (const s of [d.history.total, d.history.men, d.history.women]) await store.saveSeries(s);
+    const { rows, ...summary } = d;
+    await store.saveSnapshot("aps", d.latest.date, summary);
+    return `${d.releases.length} releases, ${rows.length} rows (${added} new), latest ${d.latest.label}${d.skipped.length ? `; skipped ${d.skipped.join("; ")}` : ""}`;
+  });
 
   for (const code of STATE_CODES) {
     await step(`state:${code}`, async () => {

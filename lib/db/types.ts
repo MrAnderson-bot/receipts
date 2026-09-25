@@ -3,6 +3,7 @@
 // methods and be returned from lib/db/index.ts.
 import type { Series, Point } from "../sources/types";
 import type { Contract, Notice } from "../sources/austender";
+import type { ApsRow } from "../sources/apsc";
 
 export type CompanyRow = { abn: string; name: string; incomeYear: string; income: number; taxable: number; tax: number };
 
@@ -23,6 +24,8 @@ export type DbStats = {
   companies: number;
   contracts: number;
   noticesRead: number;
+  apsRows: number; // cells of the APS headcount tables, one row each
+  apsReleases: number;
   lastRun: { startedAt: string; finishedAt: string | null; ok: boolean; saved: number; failed: number } | null;
 };
 
@@ -45,6 +48,9 @@ export interface Store {
   contractsWithoutNotice(limit: number): Promise<{ id: string; pageId: string }[]>;
   saveNotice(id: string, notice: Notice): Promise<void>;
   contradictions(limit: number): Promise<Contradiction[]>;
+
+  // APS headcount: every cell of the APSC's agency-by-gender-by-classification table, per release.
+  saveApsHeadcount(rows: ApsRow[]): Promise<{ added: number }>;
 
   startRun(): Promise<number>;
   finishRun(id: number, results: RunResult[]): Promise<void>;
