@@ -45,7 +45,7 @@ export function LineChart({ series }: { series: Series }) {
         <div className="y-axis" aria-hidden="true">
           {tk.map((t) => (
             <span key={t} style={{ top: `${y(t)}%` }}>
-              {series.unit === "people" ? fmt(t, "people", 1) : fmt(t, series.unit, tickDecimals)}
+              {series.unit === "people" || series.unit === "number" ? fmt(t, series.unit, 1) : fmt(t, series.unit, tickDecimals)}
             </span>
           ))}
         </div>

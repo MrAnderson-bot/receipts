@@ -6,7 +6,7 @@ export type Point = { period: string; value: number }; // period: 2026-07, 2026-
 export type Series = {
   id: string;
   label: string;
-  unit: "%" | "index" | "AUD" | "USD" | "people";
+  unit: "%" | "pts" | "index" | "AUD" | "USD" | "people" | "number" | "ratio"; // pts: a gap between two percentages; number: a count; ratio: one figure over another
   frequency: "daily" | "monthly" | "quarterly" | "yearly";
   decimals?: number; // decimal places to show, matching how the publisher quotes it (default 1)
   note: string; // what exactly is measured, in plain words

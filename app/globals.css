@@ -119,6 +119,9 @@ details.more ul { margin: 0; padding-left: 18px; color: var(--muted); }
 }
 .tag.limited { border-color: var(--ink); }
 .tag.late { color: var(--stamp); border-color: var(--stamp); text-transform: none; }
+.tag.clear { color: var(--muted); }
+.tag.watch { color: var(--ink); border-color: var(--ink); font-weight: 600; }
+.tag.triggered { color: var(--stamp); border-color: var(--stamp); font-weight: 600; }
 
 .hero.compact { padding: 40px 0 28px; }
 .hero.compact h1 { max-width: none; }

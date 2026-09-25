@@ -31,7 +31,7 @@ and `docs/launch-tools/` are owner-only and git-ignored.
 | Route | Shows |
 |---|---|
 | `/` | Headline indicators, Commonwealth revenue, last 7 days of contracts |
-| `/economy` | 12 ABS and RBA indicators with history |
+| `/economy` | Recession watch (five signals with fixed rules, no invented probability), then 26 indicators with history: recession signals (Sahm rule, yield curve, 10-year bond), growth, prices and rates, cost of living (rents, electricity, gas, groceries, fuel, credit card debt), housing supply (approvals, completions, population growth, new residents per new dwelling), jobs, households |
 | `/revenue` | Commonwealth receipts by source, share of GDP, taxes by level of government |
 | `/budget` | Budget balance, expenses by function, net debt, largest programs |
 | `/companies` | Tax Office transparency list (about 4,100 large companies), company profits by industry |
@@ -47,7 +47,14 @@ and `docs/launch-tools/` are owner-only and git-ignored.
 - `lib/sources/*.ts`: one module per source. Each exports a `tryGet...()` that returns `{ data, error }` and never
   throws, so one dead source can't blank a page. States live in `lib/sources/states/` and share `StateSummary`.
 - `lib/economy.ts`: which indicators exist and how they are grouped. Add one by adding an entry to `ABS_SERIES` or
-  `RBA_SERIES` and its id to a group.
+  `RBA_SERIES` and its id to a group. A spec's `multiply` turns a publisher's thousands or $ millions into ones.
+- `lib/derived.ts`: indicators worked out from other series (new residents per new dwelling, yield curve, Sahm rule).
+  Each names its inputs and states its method in the note. `getIndicators` fetches the inputs and builds them; they
+  are stored and snapshotted like any other series.
+- `lib/recession.ts`: the recession watch. Five signals (Sahm rule, yield curve, GDP, GDP per person, real household
+  spending), each a fixed rule over a stored series with watch and triggered thresholds, summed into Low, Elevated or
+  High. It is a checklist, not a model; the method text on the page is the contract. Change a threshold there and
+  the page text changes with it.
 - `lib/xlsx.ts`, `lib/csv.ts`: dependency-free spreadsheet, zip and CSV readers, plus `USER_AGENT`.
 - `lib/db/`: the database (below).
 - `components/LineChart.tsx`: the only chart. Single series, hover and keyboard readout.

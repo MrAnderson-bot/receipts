@@ -22,7 +22,7 @@ Needs Node 22.5 or later. See `HANDOVER.md` for project status, the database, ho
 ## Pages
 
 - `/` overview: six headline indicators, Commonwealth revenue, and the last 7 days of Commonwealth contracts
-- `/economy`: every indicator with its history, the numbers behind each chart and a source link
+- `/economy`: a recession watch (five warning signs, each with a fixed published rule) and every indicator with its history, the numbers behind each chart and a source link: recession signals (Sahm rule, yield curve, 10-year bond yield), growth, prices and rates, cost of living (rent, electricity, gas, grocery and fuel inflation, credit card debt), housing supply (dwellings approved and completed, population growth, new residents per new dwelling), jobs, pay, households and trade
 - `/revenue`: Commonwealth receipts by source with Budget estimates, receipts as a share of GDP, and taxes by level of government
 - `/budget`: the budget balance, expenses by function, net debt and interest, outcomes and estimates, and the 20 largest programs
 - `/companies`: the Tax Office's transparency list (income, taxable income and tax payable for about 4,200 large companies, Australian and foreign-owned) and ABS company profits by industry
@@ -46,8 +46,9 @@ One module per source in `lib/sources`, all returning the shapes in `lib/sources
 
 | Module | Source | Gives |
 |---|---|---|
-| `abs.ts` | ABS Data API (SDMX, CC BY 4.0) | GDP, GDP per person, CPI, unemployment, wages, company profits growth, household spending, saving ratio, terms of trade, population |
-| `rba.ts` | RBA statistical tables (CSV) | cash rate, AUD/USD |
+| `abs.ts` | ABS Data API (SDMX, CC BY 4.0) | GDP, GDP per person, CPI and its rent, electricity, gas, food and fuel components, unemployment, wages, company profits growth, household spending, saving ratio, terms of trade, population, population growth, births, dwellings approved, dwellings completed |
+| `rba.ts` | RBA statistical tables (CSV) | cash rate, AUD/USD, credit card balances accruing interest |
+| `../derived.ts` | worked out from the above | new residents per new dwelling (four-quarter population growth over dwellings completed) |
 | `austender.ts` | AusTender OCDS API (CC BY 3.0 AU) | contract notices |
 | `grantconnect.ts` | GrantConnect "Grant Award Published" report, xlsx (CC BY 3.0 AU) | grant awards |
 | `treasury.ts` | Budget Paper No. 1, Statement 5 online tables, CSV | Commonwealth receipts by source, % of GDP |

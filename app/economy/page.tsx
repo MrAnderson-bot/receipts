@@ -1,22 +1,66 @@
 import type { Metadata } from "next";
 import { getIndicators, GROUPS, latest, change } from "@/lib/economy";
+import { recessionWatch } from "@/lib/recession";
 import { value, delta, onPrevious, period } from "@/lib/format";
 import { LineChart } from "@/components/LineChart";
 
 export const revalidate = 3600;
 export const metadata: Metadata = { title: "Economy" };
 
+const STATUS = { clear: "Clear", watch: "Watch", triggered: "Triggered" };
+
 export default async function Page() {
   const results = await getIndicators();
   const byId = new Map(results.map((r) => [r.id, r]));
+  const watch = recessionWatch(results);
 
   return (
     <>
       <section className="hero compact">
         <h1>Economy</h1>
         <p>
-          Headline indicators from the Australian Bureau of Statistics and the Reserve Bank, each
-          with its history. Hover or use the arrow keys on a chart to read any point.
+          Headline indicators, the cost of living and housing supply, from the Australian Bureau of
+          Statistics and the Reserve Bank, each with its history. Hover or use the arrow keys on a
+          chart to read any point.
+        </p>
+      </section>
+
+      <section id="recession">
+        <h2>Recession watch</h2>
+        <div className="figures">
+          <div>
+            <strong>{watch.level}</strong>
+            <span>risk reading from {watch.total} warning signs, each with a fixed rule</span>
+          </div>
+          <div>
+            <strong>{watch.triggered} of {watch.total}</strong>
+            <span>signals triggered</span>
+          </div>
+          <div>
+            <strong>{watch.watch}</strong>
+            <span>on watch: moving the wrong way but not there yet</span>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Signal</th><th>Latest reading</th><th>Status</th><th>Rule</th></tr>
+            </thead>
+            <tbody>
+              {watch.signals.map((s) => (
+                <tr key={s.id}>
+                  <td><a href={`#${s.seriesId}`}>{s.name}</a></td>
+                  <td>{s.reading}<div className="desc">{s.asOf}</div></td>
+                  <td><span className={`tag ${s.status}`}>{STATUS[s.status]}</span></td>
+                  <td><div className="desc">{s.rule}</div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="note">
+          {watch.method}
+          {watch.missing.length > 0 && ` Not read this time because the source didn’t answer: ${watch.missing.join(", ")}.`}
         </p>
       </section>
 

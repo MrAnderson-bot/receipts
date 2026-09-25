@@ -7,9 +7,26 @@ type RbaSpec = Omit<Series, "points" | "source" | "sourceUrl"> & {
   seriesId: string; // value in the "Series ID" row
   table: string;
   from: string; // earliest period to keep, ISO date
+  multiply?: number; // when the table is in $ million, so figures are stored in dollars
+  aggregate?: "monthlyAverage"; // for a daily table shown monthly: average the days in each month
 };
 
 export const RBA_SERIES: RbaSpec[] = [
+  {
+    id: "bond-2y", label: "2-year bond yield", unit: "%", frequency: "monthly", decimals: 2,
+    note: "Yield on Australian Government 2-year bonds, average of daily figures in the month.",
+    file: "f2-data.csv", seriesId: "FCMYGBAG2D", table: "Table F2", from: "2016-01-01", aggregate: "monthlyAverage",
+  },
+  {
+    id: "bond-10y", label: "10-year bond yield", unit: "%", frequency: "monthly", decimals: 2,
+    note: "Yield on Australian Government 10-year bonds, average of daily figures in the month. What the government pays to borrow for a decade.",
+    file: "f2-data.csv", seriesId: "FCMYGBAG10D", table: "Table F2", from: "2016-01-01", aggregate: "monthlyAverage",
+  },
+  {
+    id: "credit-card-debt", label: "Credit card debt", unit: "AUD", frequency: "monthly",
+    note: "Credit and charge card balances accruing interest, all personal and commercial cards, seasonally adjusted. Balances paid off in full each month are not included.",
+    file: "c1-data.csv", seriesId: "CCCCSBAISA", table: "Table C1", from: "2016-01-01", multiply: 1_000_000,
+  },
   {
     id: "cash-rate", label: "Cash rate", unit: "%", frequency: "monthly", decimals: 2,
     note: "RBA cash rate target, monthly average.",
@@ -50,15 +67,23 @@ export async function fetchRba(spec: RbaSpec): Promise<Series> {
   const col = ids ? ids.indexOf(spec.seriesId) : -1;
   if (col < 0) throw new Error(`Series ${spec.seriesId} not found in RBA ${spec.file}`);
 
-  const points: Point[] = [];
+  const daily: Point[] = [];
   for (const r of rows) {
     const date = isoDate(r[0] ?? "");
-    const value = Number(r[col]);
+    const value = Number(r[col]) * (spec.multiply ?? 1);
     if (!date || date < spec.from || !r[col] || !Number.isFinite(value)) continue;
-    points.push({ period: spec.frequency === "monthly" ? date.slice(0, 7) : date, value });
+    daily.push({ period: date, value });
+  }
+  let points: Point[];
+  if (spec.aggregate === "monthlyAverage") {
+    const months = new Map<string, number[]>();
+    for (const p of daily) months.set(p.period.slice(0, 7), [...(months.get(p.period.slice(0, 7)) ?? []), p.value]);
+    points = [...months].map(([period, vs]) => ({ period, value: vs.reduce((a, b) => a + b, 0) / vs.length }));
+  } else {
+    points = daily.map((p) => ({ period: spec.frequency === "monthly" ? p.period.slice(0, 7) : p.period, value: p.value }));
   }
   if (points.length === 0) throw new Error(`RBA returned no observations for ${spec.id}`);
 
-  const { file, seriesId, table, from, ...rest } = spec;
+  const { file, seriesId, table, from, multiply, aggregate, ...rest } = spec;
   return { ...rest, points, source: `RBA, ${table}`, sourceUrl: url };
 }
