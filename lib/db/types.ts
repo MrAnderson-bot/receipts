@@ -3,6 +3,7 @@
 // methods and be returned from lib/db/index.ts.
 import type { Series, Point } from "../sources/types";
 import type { Contract, Notice } from "../sources/austender";
+import type { ExpenseRow } from "../sources/ipea";
 
 export type CompanyRow = { abn: string; name: string; incomeYear: string; income: number; taxable: number; tax: number };
 
@@ -23,6 +24,7 @@ export type DbStats = {
   companies: number;
   contracts: number;
   noticesRead: number;
+  expenses: number; // parliamentarians' expense lines from IPEA
   lastRun: { startedAt: string; finishedAt: string | null; ok: boolean; saved: number; failed: number } | null;
 };
 
@@ -45,6 +47,9 @@ export interface Store {
   contractsWithoutNotice(limit: number): Promise<{ id: string; pageId: string }[]>;
   saveNotice(id: string, notice: Notice): Promise<void>;
   contradictions(limit: number): Promise<Contradiction[]>;
+
+  // Every parliamentarian expense line IPEA publishes, one row each, every column as published.
+  saveExpenses(rows: ExpenseRow[]): Promise<{ added: number }>;
 
   startRun(): Promise<number>;
   finishRun(id: number, results: RunResult[]): Promise<void>;

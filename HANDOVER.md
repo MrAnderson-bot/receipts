@@ -38,6 +38,7 @@ and `docs/launch-tools/` are owner-only and git-ignored.
 | `/spending` | Commonwealth contracts: late reporting, limited tender, agencies, suppliers (nav label "Contracts"). `/spending/7`, `/spending/90` for other ranges |
 | `/categories` | What contracts buy, by UNSPSC segment (same `/7`, `/90` ranges) |
 | `/grants` | Commonwealth grant awards (same ranges) |
+| `/expenses` | Parliamentarians' work expenses, latest quarter vs a year earlier (IPEA): categories, parties, states, top 20 people, largest lines. Every line stored in `ipea_expenses` |
 | `/states` | NSW, VIC, QLD, WA, NT, TAS contracts and ACT invoices. `/states/QLD` etc. |
 | `/migration` | Net overseas migration, temporary visa holders, permanent program, skilled and working holiday grants, citizenship by country |
 | `/sources` | Every feed with live status, database totals, and what isn't connected |

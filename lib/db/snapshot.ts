@@ -11,6 +11,7 @@ import { tryGetTransparency, loadAllEntities } from "../sources/ato-transparency
 import { tryGetProfits } from "../sources/abs-profits";
 import { tryGetState, STATE_CODES } from "../sources/states";
 import { tryGetMigration } from "../sources/migration";
+import { loadQuarters, summarise as summariseExpenses } from "../sources/ipea";
 import type { Series } from "../sources/types";
 import type { YearValue } from "../sources/treasury";
 
@@ -104,6 +105,16 @@ export async function runSnapshot(): Promise<RunResult[]> {
       return `${d.count} grants`;
     });
   }
+
+  // Parliamentarians' expenses: the summary is kept as a snapshot and every line goes into its own table.
+  await step("ipea-expenses", async () => {
+    const loaded = await loadQuarters();
+    const summary = summariseExpenses(loaded);
+    await store.saveSnapshot("ipea-expenses", summary.latest.id, summary);
+    const rows = loaded.flatMap((l) => l.rows);
+    const { added } = await store.saveExpenses(rows);
+    return `${rows.length} lines across ${loaded.length} quarters to ${summary.latest.period}, ${added} new rows`;
+  });
 
   // Read the notice page for contracts that don't have it yet, newest first. The API leaves out the
   // fields the page shows, so this is what makes a stored record match the public one. Politely:

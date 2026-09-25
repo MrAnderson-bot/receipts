@@ -29,6 +29,7 @@ Needs Node 22.5 or later. See `HANDOVER.md` for project status, the database, ho
 - `/spending`: late reporting, limited tender share and reasons, overseas suppliers, top agencies and suppliers, largest contracts (`/spending/7`, `/spending/90`; 30 days by default)
 - `/categories`: what the money buys, by UNSPSC segment, split into services and goods, with the biggest buyer and seller in each
 - `/grants`: Commonwealth grant awards by category, selection process, agency, recipient and state (`/grants/7`, `/grants/90`)
+- `/expenses`: parliamentarians' work expenses for the latest quarter (IPEA), against the same quarter a year earlier: by category, party and state, the 20 biggest spenders with their category split, and the largest single lines, each linked to IPEA's report for that person
 - `/states`: state and territory contracts (`/states/VIC`, `/states/QLD` and so on; NSW by default), plus the state with no usable data and why
 - `/migration`: net overseas migration (ABS), temporary visa holders by category, permanent Migration Program outcomes, skilled and working holiday visas granted, NOM by visa category and new citizens by former citizenship (Home Affairs)
 - `/sources`: every feed, its licence, whether it answered, and what isn't connected yet
@@ -51,6 +52,7 @@ One module per source in `lib/sources`, all returning the shapes in `lib/sources
 | `../derived.ts` | worked out from the above | new residents per new dwelling (four-quarter population growth over dwellings completed) |
 | `austender.ts` | AusTender OCDS API (CC BY 3.0 AU) | contract notices |
 | `grantconnect.ts` | GrantConnect "Grant Award Published" report, xlsx (CC BY 3.0 AU) | grant awards |
+| `ipea.ts` | IPEA quarterly expenditure extracts on data.gov.au, CSV, found through the CKAN API (CC BY 3.0 AU) | every parliamentarian expense line, latest five quarters, stored one row each in `ipea_expenses` |
 | `treasury.ts` | Budget Paper No. 1, Statement 5 online tables, CSV | Commonwealth receipts by source, % of GDP |
 | `budget.ts` | Department of Finance Budget tables on data.gov.au, zip of CSVs plus xlsx (CC BY 4.0) | expenses by function, receipts/payments/balance since 1970-71, net debt, program expenses |
 | `states/qld.ts` | about 240 Queensland agency contract disclosure files, via the data.qld.gov.au datastore API (CC BY 4.0) | state contracts, last 12 months |

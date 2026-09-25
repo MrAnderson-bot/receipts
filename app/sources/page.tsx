@@ -10,6 +10,7 @@ import { tryGetBudget } from "@/lib/sources/budget";
 import { tryGetTransparency } from "@/lib/sources/ato-transparency";
 import { tryGetState, STATE_CODES, NOT_CONNECTED as STATES_NOT_CONNECTED } from "@/lib/sources/states";
 import { tryGetMigration } from "@/lib/sources/migration";
+import { tryGetExpenses } from "@/lib/sources/ipea";
 import { getStore, type DbStats } from "@/lib/db";
 import { num } from "@/lib/format";
 
@@ -38,6 +39,7 @@ export default async function Page() {
     getIndicators(), tryGetSummary(7), tryGetGrants(7), tryGetRevenue(), tryGetTaxByLevel(),
     tryGetBudget(), tryGetTransparency(), tryGetMigration(), ...STATE_CODES.map((c) => tryGetState(c)),
   ]);
+  const expenses = await tryGetExpenses();
   const okIds = new Set(indicators.filter((r) => r.series).map((r) => r.id));
   const count = (ids: string[]) => `${ids.filter((id) => okIds.has(id)).length} of ${ids.length} series answering`;
   const absIds = ABS_SERIES.map((s) => s.id);
@@ -75,6 +77,14 @@ export default async function Page() {
       licence: "CC BY 3.0 AU",
       ok: !!grants.data,
       status: grants.data ? `${num(grants.data.count)} grants in the last 7 days` : `Not answering. ${grants.error}`,
+    },
+    {
+      name: "IPEA, parliamentarians' expenditure reports on data.gov.au",
+      url: "https://data.gov.au/data/organization/ipea",
+      gives: "every work expense line for current and former parliamentarians: person, party, electorate, category, dates, locations, amount",
+      licence: expenses.data?.latest.licence ?? "CC BY",
+      ok: !!expenses.data,
+      status: expenses.data ? `${num(expenses.data.latest.rows)} expense lines, ${expenses.data.latest.period}` : `Not answering. ${expenses.error}`,
     },
     {
       name: "Treasury, Budget Paper No. 1, Statement 5",
@@ -205,6 +215,7 @@ export default async function Page() {
           <p className="note" style={{ marginTop: 12 }}>
             Contract notices stored one row each: {num(db.contracts)}, of which {num(db.noticesRead)} have had their public page read
             for the fields the API leaves out (execution date, Australian business flag, confidentiality, extension options).
+            Parliamentarians’ expense lines stored one row each, every column as IPEA published it: {num(db.expenses)}.
           </p>
           <p className="note" style={{ marginTop: 12 }}>
             {db.lastRun

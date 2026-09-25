@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/spending", label: "Contracts" },
   { href: "/categories", label: "Categories" },
   { href: "/grants", label: "Grants" },
+  { href: "/expenses", label: "Expenses" },
   { href: "/states", label: "States" },
   { href: "/migration", label: "Migration" },
   { href: "/sources", label: "Sources" },

@@ -4,7 +4,12 @@ import { mkdirSync } from "fs";
 import path from "path";
 import type { Series } from "../sources/types";
 import { noticePageId, type Contract, type Notice } from "../sources/austender";
+import { EXPENSE_COLUMNS, type ExpenseRow } from "../sources/ipea";
 import type { CompanyRow, Contradiction, DbStats, RunResult, Store } from "./types";
+
+// UniqueId -> unique_id, ReportingPeriodId -> reporting_period_id, and so on.
+const snake = (s: string) => s.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
+const EXPENSE_DB_COLUMNS = EXPENSE_COLUMNS.map(snake);
 
 const FILE = path.join(process.cwd(), "data", "receipts.db");
 
@@ -49,6 +54,13 @@ CREATE TABLE IF NOT EXISTS contracts (
 );
 CREATE INDEX IF NOT EXISTS contracts_unread ON contracts (notice_read_at, published);
 CREATE INDEX IF NOT EXISTS contracts_by_flag ON contracts (n_australian_business, value);
+-- Parliamentarians' expense lines from IPEA, one row each, every published column as text (amount included),
+-- plus amount_aud as a number for sums.
+CREATE TABLE IF NOT EXISTS ipea_expenses (
+  ${EXPENSE_DB_COLUMNS.map((c) => `${c} TEXT${c === "unique_id" ? " PRIMARY KEY" : ""}`).join(", ")},
+  amount_aud REAL NOT NULL, source_url TEXT NOT NULL, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ipea_expenses_by_period ON ipea_expenses (reporting_period_id, surname, first_name);
 CREATE TABLE IF NOT EXISTS runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, finished_at TEXT,
   ok INTEGER NOT NULL DEFAULT 0, saved INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0, detail TEXT
@@ -132,6 +144,26 @@ export const sqliteStore: Store = {
     return rows.length;
   },
 
+  async saveExpenses(rows: ExpenseRow[]) {
+    const d = open();
+    const at = now();
+    const cols = [...EXPENSE_DB_COLUMNS, "amount_aud", "source_url", "first_seen", "last_seen"];
+    const updates = cols.filter((c) => c !== "unique_id" && c !== "first_seen").map((c) => `${c} = excluded.${c}`);
+    const insert = d.prepare(`INSERT INTO ipea_expenses (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(",")})
+      ON CONFLICT(unique_id) DO UPDATE SET ${updates.join(", ")}`);
+    const fresh = d.prepare("SELECT first_seen = ? AS fresh FROM ipea_expenses WHERE unique_id = ?");
+    let added = 0;
+    d.exec("BEGIN");
+    try {
+      for (const r of rows) {
+        insert.run(...EXPENSE_COLUMNS.map((c) => r[c]), r.amount, r.sourceUrl, at, at);
+        if (fresh.get(at, r.UniqueId)?.fresh) added++;
+      }
+      d.exec("COMMIT");
+    } catch (e) { d.exec("ROLLBACK"); throw e; }
+    return { added };
+  },
+
   async saveContracts(rows: Contract[]) {
     const d = open();
     const at = now();
@@ -201,6 +233,7 @@ export const sqliteStore: Store = {
       location: path.relative(process.cwd(), FILE).replace(/\\/g, "/"),
       series: count("series"), observations: count("observations"), snapshots: count("snapshots"), companies: count("companies"),
       contracts: count("contracts"), noticesRead: count("contracts WHERE notice_read_at IS NOT NULL"),
+      expenses: count("ipea_expenses"),
       lastRun: run ? { startedAt: run.started_at, finishedAt: run.finished_at, ok: !!run.ok, saved: run.saved, failed: run.failed } : null,
     };
   },
