@@ -10,6 +10,7 @@ import { tryGetBudget } from "@/lib/sources/budget";
 import { tryGetTransparency } from "@/lib/sources/ato-transparency";
 import { tryGetState, STATE_CODES, NOT_CONNECTED as STATES_NOT_CONNECTED } from "@/lib/sources/states";
 import { tryGetMigration } from "@/lib/sources/migration";
+import { tryGetFuel, FUEL_CODES, keyNeeded, NOT_CONNECTED as FUEL_NOT_CONNECTED } from "@/lib/sources/fuel";
 import { getStore, type DbStats } from "@/lib/db";
 import { num } from "@/lib/format";
 
@@ -31,6 +32,7 @@ const NOT_CONNECTED = [
     why: "Listed companies report earnings as PDF announcements. There is no open dataset, the ASX’s own data is licensed commercially, and the free feeds people use are unofficial and barred from republication. The Tax Office’s transparency list on the companies page is the open alternative.",
   },
   ...STATES_NOT_CONNECTED,
+  ...FUEL_NOT_CONNECTED,
 ];
 
 export default async function Page() {
@@ -38,6 +40,7 @@ export default async function Page() {
     getIndicators(), tryGetSummary(7), tryGetGrants(7), tryGetRevenue(), tryGetTaxByLevel(),
     tryGetBudget(), tryGetTransparency(), tryGetMigration(), ...STATE_CODES.map((c) => tryGetState(c)),
   ]);
+  const fuel = await Promise.all(FUEL_CODES.map((c) => tryGetFuel(c)));
   const okIds = new Set(indicators.filter((r) => r.series).map((r) => r.id));
   const count = (ids: string[]) => `${ids.filter((id) => okIds.has(id)).length} of ${ids.length} series answering`;
   const absIds = ABS_SERIES.map((s) => s.id);
@@ -139,6 +142,20 @@ export default async function Page() {
         ? `${num(s.data.count)} ${s.data.noun}, ${s.data.period.toLowerCase()}, ${num(s.data.filesRead)} ${s.data.filesRead === 1 ? "file" : "files"} read${s.data.filesSkipped.length ? `, ${num(s.data.filesSkipped.length)} left out` : ""}`
         : `Not answering. ${s.error}`,
     })),
+    ...fuel.map((f, i) => {
+      const code = FUEL_CODES[i];
+      const key = keyNeeded(code);
+      return {
+        name: f.data ? `${f.data.name} fuel prices: ${f.data.sourceName}` : `${code} fuel prices`,
+        url: f.data?.sourceUrl ?? "https://www.accc.gov.au/consumers/petrol-and-fuel",
+        gives: "fuel prices per station: name, brand, address, suburb, fuel type, price, when reported",
+        licence: f.data?.licence ?? "Scheme terms, shown with attribution",
+        ok: !!f.data,
+        status: f.data
+          ? `${num(f.data.stationCount)} stations, ${f.data.live ? "live" : "latest file"}, prices for ${f.data.date}${key ? `. Live feed ${key}` : ""}`
+          : key ? `Waiting on a key. ${key}` : `Not answering. ${f.error}`,
+      };
+    }),
   ];
   const failed = indicators.filter((r) => !r.series);
   // The database is a local file, so a deployed copy of the site has nothing to show here.
@@ -205,6 +222,8 @@ export default async function Page() {
           <p className="note" style={{ marginTop: 12 }}>
             Contract notices stored one row each: {num(db.contracts)}, of which {num(db.noticesRead)} have had their public page read
             for the fields the API leaves out (execution date, Australian business flag, confidentiality, extension options).
+            Fuel prices held for today: {num(db.fuelPrices)}, one per station and fuel, replaced each day; state-level medians
+            are kept daily as snapshots.
           </p>
           <p className="note" style={{ marginTop: 12 }}>
             {db.lastRun

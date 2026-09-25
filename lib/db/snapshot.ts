@@ -10,6 +10,7 @@ import { tryGetBudget } from "../sources/budget";
 import { tryGetTransparency, loadAllEntities } from "../sources/ato-transparency";
 import { tryGetProfits } from "../sources/abs-profits";
 import { tryGetState, STATE_CODES } from "../sources/states";
+import { tryGetFuel, FUEL_CODES } from "../sources/fuel";
 import { tryGetMigration } from "../sources/migration";
 import type { Series } from "../sources/types";
 import type { YearValue } from "../sources/treasury";
@@ -149,6 +150,16 @@ export async function runSnapshot(): Promise<RunResult[]> {
       const d = need(await tryGetState(code));
       await store.saveSnapshot("state", code, d);
       return `${d.count} ${d.noun}`;
+    });
+  }
+
+  // Fuel: the state-level figures are kept daily as a snapshot; the station rows replace yesterday's.
+  for (const code of FUEL_CODES) {
+    await step(`fuel:${code}`, async () => {
+      const { prices, ...summary } = need(await tryGetFuel(code));
+      await store.saveSnapshot("fuel", code, summary);
+      const saved = await store.saveFuelPrices(code, prices);
+      return `${summary.stationCount} stations, ${saved} prices for ${summary.date}`;
     });
   }
 

@@ -13,6 +13,7 @@ const LINKS = [
   { href: "/categories", label: "Categories" },
   { href: "/grants", label: "Grants" },
   { href: "/states", label: "States" },
+  { href: "/fuel", label: "Fuel" },
   { href: "/migration", label: "Migration" },
   { href: "/sources", label: "Sources" },
 ];
