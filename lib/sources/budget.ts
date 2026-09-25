@@ -25,6 +25,12 @@ export type Budget = {
   netDebt: YearValue[]; // $m
   netDebtShare: YearValue[]; // % of GDP
   netInterest: YearValue[]; // net interest payments, $m
+  // Added for the government scorecard.
+  receiptsShare: YearValue[]; // receipts, % of GDP
+  paymentsRealGrowth: YearValue[]; // payments, real growth on the previous year, %
+  netInterestShare: YearValue[]; // net interest payments, % of GDP
+  netCapitalInvestment: YearValue[]; // general government net capital investment, $m
+  netCapitalInvestmentShare: YearValue[]; // % of GDP
   programs: BudgetProgram[]; // 20 largest programs in the budget year
   portfolios: { name: string; value: number }[]; // program expenses by portfolio, budget year
 };
@@ -89,6 +95,8 @@ async function load(): Promise<Budget> {
   const cash = table(/receipts, payments.*underlying cash balance/i);
   // Columns: year, net debt $m, % GDP, net interest $m, % GDP
   const debt = table(/net debt and net interest payments/i);
+  // Columns: year, revenue $m, % GDP, expenses $m, % GDP, net operating balance $m, % GDP, net capital investment $m, % GDP, fiscal balance $m, % GDP
+  const accrual = table(/net capital investment and fiscal balance/i);
   const receipts = byYear(cash, 1);
 
   // Program expenses, in $'000. "Revenue from Government" rows repeat money already counted as an expense.
@@ -122,6 +130,8 @@ async function load(): Promise<Budget> {
     functions, totalExpenses, receipts,
     payments: byYear(cash, 3), balance: byYear(cash, 7), balanceShare: byYear(cash, 8),
     netDebt: byYear(debt, 1), netDebtShare: byYear(debt, 2), netInterest: byYear(debt, 3),
+    receiptsShare: byYear(cash, 2), paymentsRealGrowth: byYear(cash, 4), netInterestShare: byYear(debt, 4),
+    netCapitalInvestment: byYear(accrual, 7), netCapitalInvestmentShare: byYear(accrual, 8),
     programs: [...programs.values()].sort((a, b) => b.value - a.value).slice(0, 20),
     portfolios: [...portfolios.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
   };

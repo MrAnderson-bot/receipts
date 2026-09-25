@@ -37,7 +37,21 @@ export const RBA_SERIES: RbaSpec[] = [
     note: "US dollars per Australian dollar, 4pm Sydney indicative rate.",
     file: "f11.1-data.csv", seriesId: "FXRUSD", table: "Table F11.1", from: "2023-01-01",
   },
+  // Added for the government scorecard (lib/scorecard.ts).
+  {
+    id: "mortgage-rate", label: "New mortgage rate", unit: "%", frequency: "monthly", decimals: 2,
+    note: "Average interest rate on variable-rate owner-occupier housing loans funded in the month, all lenders: what a new borrower pays. The table starts in 2019.",
+    file: "f6-data.csv", seriesId: "FLRHOFVA", table: "Table F6", from: "2019-01-01",
+  },
+  {
+    id: "household-debt-income", label: "Household debt to income", unit: "%", frequency: "quarterly",
+    note: "Household debt as a share of annualised household disposable income.",
+    file: "e2-data.csv", seriesId: "BHFDDIT", table: "Table E2", from: "2016-01-01",
+  },
 ];
+
+// 2026-06-30 -> 2026-Q2, for tables dated at quarter end.
+const quarter = (d: string) => `${d.slice(0, 4)}-Q${Math.ceil(Number(d.slice(5, 7)) / 3)}`;
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
@@ -80,7 +94,10 @@ export async function fetchRba(spec: RbaSpec): Promise<Series> {
     for (const p of daily) months.set(p.period.slice(0, 7), [...(months.get(p.period.slice(0, 7)) ?? []), p.value]);
     points = [...months].map(([period, vs]) => ({ period, value: vs.reduce((a, b) => a + b, 0) / vs.length }));
   } else {
-    points = daily.map((p) => ({ period: spec.frequency === "monthly" ? p.period.slice(0, 7) : p.period, value: p.value }));
+    points = daily.map((p) => ({
+      period: spec.frequency === "monthly" ? p.period.slice(0, 7) : spec.frequency === "quarterly" ? quarter(p.period) : p.period,
+      value: p.value,
+    }));
   }
   if (points.length === 0) throw new Error(`RBA returned no observations for ${spec.id}`);
 

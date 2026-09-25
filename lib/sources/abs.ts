@@ -110,6 +110,42 @@ export const ABS_SERIES: AbsSpec[] = [
     note: "New dwellings finished in the quarter, all sectors, seasonally adjusted.",
     flow: "ABS,BUILDING_ACTIVITY,1.0.0", key: "M7.AUS.CUR.1.9.100.20.Q", from: "2016", table: "Building Activity",
   },
+  // Added for the government scorecard (lib/scorecard.ts). Keys checked against the API on 25 September 2026.
+  {
+    id: "cpi-quarterly", label: "CPI, quarterly index", unit: "index", frequency: "quarterly",
+    note: "Consumer Price Index, all groups, quarterly index. Used to put quarterly wage growth in real terms; the monthly series is the headline.",
+    flow: "ABS,CPI,2.0.0", key: "1.10001.10.50.Q", from: "2016", table: "Consumer Price Index",
+  },
+  {
+    id: "participation", label: "Participation rate", unit: "%", frequency: "monthly",
+    note: "People in work or looking for it, as a share of everyone aged 15 and over, seasonally adjusted.",
+    flow: "ABS,LF,1.0.0", key: "M12.3.1599.20.AUS.M", from: "2016", table: "Labour Force",
+  },
+  {
+    id: "underemployment", label: "Underemployment rate", unit: "%", frequency: "monthly",
+    note: "Employed people who want and could work more hours, as a share of the labour force, seasonally adjusted.",
+    flow: "ABS,LF_UNDER,1.0.1", key: "M23.3.1599.20.AUS.M", from: "2016", table: "Labour Force",
+  },
+  {
+    id: "productivity", label: "Labour productivity", unit: "index", frequency: "quarterly",
+    note: "GDP per hour worked, index, seasonally adjusted: output for each hour of work across the whole economy.",
+    flow: "ABS,ANA_AGG,1.0.0", key: "M5.GPM_PHW.20.AUS.Q", from: "2016", table: "National Accounts",
+  },
+  {
+    id: "dwelling-price", label: "Mean home price", unit: "AUD", frequency: "quarterly",
+    note: "Mean price of residential dwellings, Australia, all dwelling types. The ABS publishes it in $ thousands.",
+    flow: "ABS,RES_DWELL_ST,1.0.0", key: "5.AUS.Q", from: "2016", table: "Total Value of Dwellings", multiply: 1000,
+  },
+  {
+    id: "public-investment", label: "Public investment", unit: "AUD", frequency: "quarterly",
+    note: "Gross fixed capital formation by the public sector (general government and public corporations, all levels of government), current prices, seasonally adjusted: what governments spent building and buying assets in the quarter.",
+    flow: "ABS,ANA_EXP,1.0.0", key: "C.GFC.GSS.20.AUS.Q", from: "2016", table: "National Accounts", multiply: 1_000_000,
+  },
+  {
+    id: "gdp-nominal", label: "GDP, current prices", unit: "AUD", frequency: "quarterly",
+    note: "Gross domestic product in the quarter at current prices, seasonally adjusted. The denominator for shares of GDP.",
+    flow: "ABS,ANA_EXP,1.0.0", key: "C.GPM.SSS.20.AUS.Q", from: "2016", table: "National Accounts", multiply: 1_000_000,
+  },
 ];
 
 export async function fetchAbs(spec: AbsSpec): Promise<Series> {

@@ -43,6 +43,10 @@ nav a {
   font-size: 0.9rem; color: var(--muted);
 }
 nav a[aria-current="page"] { background: var(--ink); color: var(--paper); }
+nav a[aria-current="true"] { background: var(--ink); color: var(--paper); }
+/* The current group's pages, on their own row under the group bar. */
+nav.sub { flex-basis: 100%; background: none; padding: 0; gap: 2px; border-top: 1px solid var(--rule); border-radius: 0; padding-top: 6px; }
+nav.sub a { font-size: 0.9rem; }
 
 .dev-banner {
   margin-top: 20px; padding: 12px 16px; border-left: 4px solid var(--stamp);

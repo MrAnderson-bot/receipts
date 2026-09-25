@@ -31,7 +31,8 @@ and `docs/launch-tools/` are owner-only and git-ignored.
 | Route | Shows |
 |---|---|
 | `/` | Headline indicators, Commonwealth revenue, last 7 days of contracts |
-| `/economy` | Recession watch (five signals with fixed rules, no invented probability), then 26 indicators with history: recession signals (Sahm rule, yield curve, 10-year bond), growth, prices and rates, cost of living (rents, electricity, gas, groceries, fuel, credit card debt), housing supply (approvals, completions, population growth, new residents per new dwelling), jobs, households |
+| `/economy` | Recession watch (five signals with fixed rules, no invented probability), then 35 indicators with history: recession signals (Sahm rule, yield curve, 10-year bond), growth, prices and rates, cost of living (real wages, rents, electricity, gas, groceries, fuel, new mortgage rate, mean home price, household debt to income, credit card debt), housing supply (approvals, completions, population growth, new residents per new dwelling), jobs (unemployment, participation, underemployment, wages, productivity, profits), households, government investment and gross debt as shares of GDP |
+| `/scorecard` | Government scorecard: 26 KPIs in six groups (affordability, housing supply, jobs and growth, budget and debt, investment, procurement), each a fixed rule over an official figure, met/missed/no data. Score out of 100 = share of readable rules met, per group and overall, plus the same over the government's published targets only; every missed rule says what has to change, listed weakest group first as "what would lift the score". Design, rules and gaps in `docs/kpi-scorecard.md` |
 | `/revenue` | Commonwealth receipts by source, share of GDP, taxes by level of government |
 | `/budget` | Budget balance, expenses by function, net debt, largest programs |
 | `/companies` | Tax Office transparency list (about 4,100 large companies), company profits by industry |
@@ -57,6 +58,12 @@ and `docs/launch-tools/` are owner-only and git-ignored.
 - `lib/derived.ts`: indicators worked out from other series (new residents per new dwelling, yield curve, Sahm rule).
   Each names its inputs and states its method in the note. `getIndicators` fetches the inputs and builds them; they
   are stored and snapshotted like any other series.
+- `lib/scorecard.ts`: the government scorecard, built the same way as the recession watch. Each KPI is a fixed rule
+  over a stored series, a Budget table column or the 90-day contract summary, returning met, missed or no data; the
+  count is "met X of Y readable", never a weighted score. `basis` marks whether the rule is the government's own
+  published target (Housing Accord, inflation band, gross debt trajectory) or our yardstick. Thresholds are
+  constants at the top of the file and the rule text is built from them. Why each rule exists, what data it
+  needs and what isn't tracked yet is in `docs/kpi-scorecard.md`; record any threshold change there with the date.
 - `lib/recession.ts`: the recession watch. Five signals (Sahm rule, yield curve, GDP, GDP per person, real household
   spending), each a fixed rule over a stored series with watch and triggered thresholds, summed into Low, Elevated or
   High. It is a checklist, not a model; the method text on the page is the contract. Change a threshold there and
@@ -205,6 +212,9 @@ arrive in the next Budget's tables). WA's newest open contract file is 2023-24. 
    `/etc/receipts.env` on the VM, then `sudo systemctl start receipts-publish.service` and check the log. Until
    then, `npm run snapshot` on the dev machine keeps history accumulating.
    **Fuel API keys to register**, also for `/etc/receipts.env`, each on the personal account, never a company one.
+   Status 25 September 2026: NSW/TAS key in place and working. Victoria, South Australia and the Queensland live
+   feed are applied for; each scheme approves by hand and emails the key, so the owner is waiting on them. Nothing
+   to do in code until a key arrives: the loaders and page text are ready, and each state says "waiting on a key".
    Every keyed scheme is read at most three times a day (eight-hour cache, and a failure waits eight hours too).
    The pages cache only the state summaries; the station rows are over Next's 2 MB cache limit, so the snapshot
    step loads each feed once more, uncached, and stores the rows itself (the same pattern as `loadAps`):
@@ -238,9 +248,15 @@ arrive in the next Budget's tables). WA's newest open contract file is 2023-24. 
    recipients by ABN to answer "which companies with no tax payable hold government contracts, and for how much".
 4. **Read history back into the pages**: revision markers on the economy charts, and "this figure a month ago" on
    contracts and grants, from `seriesHistory()` and `snapshots()`.
-5. **Fill the indicator gaps**, all available without keys: housing (dwelling values, approvals, lending, rents),
-   trade and the RBA commodity price index, household debt and mortgage rates, labour detail (participation,
-   underemployment, hours, vacancies), productivity, and a real-wages line.
+5. **Fill the indicator gaps**, all available without keys. Done 25 September 2026 with the scorecard: mean home
+   price, household debt to income, new mortgage rate, participation, underemployment, productivity, a real-wages
+   line, public investment and nominal GDP (for shares of GDP). Still to do: housing lending (ABS `LEND_HOUSING`),
+   trade and the RBA commodity price index, hours worked and job vacancies.
+   **Scorecard follow-ups** (`docs/kpi-scorecard.md` has the full list): store each day's scorecard result as a
+   `scorecard` snapshot so "indicators met" can be charted; store the 90-day contract summary's late and limited
+   tender figures as daily series so the two procurement rules can switch from fixed thresholds to "no worse than
+   a year earlier" in September 2027; then emissions against the 43% target (DCCEEW), R&D share of GDP, SME share
+   of contracts (Finance's yearly procurement statistics), bulk-billing, and state budgets (ABS GFS).
 6. **More sources**: ASIC insolvencies, ABS Government Finance Statistics for state budgets and debt, AEC political
    donations (joinable to contracts by name), DSS payment recipients, net overseas migration.
 7. ~~**They Vote For You**~~ Done 25 September 2026: `lib/sources/tvfy.ts` and `/parliament`, labelled third-party on

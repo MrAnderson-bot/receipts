@@ -71,9 +71,14 @@ export async function runSnapshot(): Promise<RunResult[]> {
     await store.saveSeries(yearly("net-debt", "Commonwealth net debt", "AUD", src, d.datasetUrl, d.netDebt, M));
     await store.saveSeries(yearly("net-debt-share-gdp", "Commonwealth net debt, share of GDP", "%", src, d.datasetUrl, d.netDebtShare));
     await store.saveSeries(yearly("net-interest", "Commonwealth net interest payments", "AUD", src, d.datasetUrl, d.netInterest, M));
+    await store.saveSeries(yearly("net-interest-share-gdp", "Commonwealth net interest payments, share of GDP", "%", src, d.datasetUrl, d.netInterestShare));
+    await store.saveSeries(yearly("budget-receipts-share-gdp", "Commonwealth receipts, share of GDP (Budget tables)", "%", src, d.datasetUrl, d.receiptsShare));
+    await store.saveSeries(yearly("budget-payments-real-growth", "Commonwealth payments, real growth", "%", src, d.datasetUrl, d.paymentsRealGrowth));
+    await store.saveSeries(yearly("net-capital-investment", "Commonwealth net capital investment", "AUD", src, d.datasetUrl, d.netCapitalInvestment, M));
+    await store.saveSeries(yearly("net-capital-investment-share-gdp", "Commonwealth net capital investment, share of GDP", "%", src, d.datasetUrl, d.netCapitalInvestmentShare));
     // Estimates change with every Budget, so they are kept whole in the snapshot, dated by when they were read.
     await store.saveSnapshot("budget", d.budgetYear, d);
-    return `6 series, ${d.budgetYear} Budget`;
+    return `11 series, ${d.budgetYear} Budget`;
   });
 
   await step("asset-sales", async () => {
