@@ -72,7 +72,7 @@ and `docs/launch-tools/` are owner-only and git-ignored.
   publish. Read it before adding history to anything; it records what each publisher offers and the disk rules.
   **Running on the VM since 25 September 2026:** `receipts-backfill.service` runs `deploy/backfill.sh`, a loop
   that calls `npm run backfill -- contracts:FY<yyyy-yy>` newest year first (2025-26 back to 2007-08), ten
-  minutes a pass, pausing while the nightly publish runs. Check it with `.\deployackfill-status.ps1`
+  minutes a pass, pausing while the nightly publish runs. Check it with `.\deploy\backfill-status.ps1`
   (`-Stop` and `-Start` to pause and resume); install or update it with `deploy/vm-install-backfill.sh`. The
   backup bucket deletes copies older than 14 days (lifecycle rule set the same day).
 - `lib/governments.ts`: federal governments by date (prime minister, party, sworn-in dates, National Archives
