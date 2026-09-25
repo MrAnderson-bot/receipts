@@ -8,6 +8,7 @@ import type { FuelPrice } from "../sources/fuel/types";
 import type { ApsRow } from "../sources/apsc";
 import type { BackfillProgress, CompanyRow, Contradiction, DbStats, Revision, RunResult, Store } from "./types";
 import { EXPENSE_COLUMNS, type ExpenseRow } from "../sources/ipea";
+import type { StateGrantRow } from "../sources/state-grants/types";
 
 // UniqueId -> unique_id, ReportingPeriodId -> reporting_period_id, and so on.
 const snake = (s: string) => s.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
@@ -74,6 +75,21 @@ CREATE TABLE IF NOT EXISTS ipea_expenses (
   amount_aud REAL NOT NULL, source_url TEXT NOT NULL, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ipea_expenses_by_period ON ipea_expenses (reporting_period_id, surname, first_name);
+-- State grant payment lines, one row per line of the state's published list. The reduced fields every state
+-- shares are columns; "fields" holds every column the state published, as JSON under the published headings,
+-- so nothing is lost when a state's layout differs. "id" is the line's position where a whole file is
+-- republished (Queensland) or the grant's own facts where a list rolls forward (Lotterywest).
+CREATE TABLE IF NOT EXISTS state_grants (
+  state TEXT NOT NULL, financial_year TEXT NOT NULL, id TEXT NOT NULL, program_id TEXT NOT NULL,
+  agency TEXT NOT NULL, agency_code TEXT NOT NULL, program TEXT NOT NULL, sub_program TEXT NOT NULL, purpose TEXT NOT NULL,
+  recipient TEXT NOT NULL, recipient_abn TEXT, pooled INTEGER NOT NULL, recipient_type TEXT NOT NULL, category TEXT NOT NULL,
+  assistance TEXT NOT NULL, funding_source TEXT NOT NULL, value REAL NOT NULL, agreement_total REAL,
+  start TEXT, end TEXT, delivery_lga TEXT NOT NULL, fields TEXT NOT NULL,
+  source_url TEXT NOT NULL, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL,
+  PRIMARY KEY (state, financial_year, id)
+);
+CREATE INDEX IF NOT EXISTS state_grants_by_abn ON state_grants (recipient_abn);
+CREATE INDEX IF NOT EXISTS state_grants_by_program ON state_grants (state, program_id);
 -- Every release the AusTender API publishes, one row per contract per release: the original notice (tag
 -- "contract") and each amendment (tag "contractAmendment", same cn_id, its own award and page). Every API
 -- field has a column and the whole release is kept as JSON, minus agency contact names, emails and phones.
@@ -115,6 +131,14 @@ function open(): Database {
   const opened: Database = new sqlite.DatabaseSync(FILE);
   // busy_timeout: the dev server, the nightly build and a backfill script may share the file; wait, don't fail.
   opened.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 10000;");
+  // state_grants changed shape twice on 25 September 2026 before it was ever filled outside a scratch copy.
+  // An empty table missing any column of the current schema is replaced by the current one.
+  const grantCols = new Set((opened.prepare("PRAGMA table_info(state_grants)").all() as { name: string }[]).map((c) => c.name));
+  const wantedGrantCols = [...(SCHEMA.match(/CREATE TABLE IF NOT EXISTS state_grants \(([\s\S]*?)\n\);/)?.[1] ?? "").matchAll(/(?:^|,)\s*(?:--[^\n]*\n\s*)?(\w+)\s+(?:TEXT|REAL|INTEGER)/g)].map((m) => m[1]);
+  if (grantCols.size > 0 && wantedGrantCols.some((c) => !grantCols.has(c))
+      && Number(opened.prepare("SELECT COUNT(*) AS n FROM state_grants").get().n) === 0) {
+    opened.exec("DROP TABLE state_grants");
+  }
   opened.exec(SCHEMA);
   // CREATE TABLE IF NOT EXISTS leaves an existing table alone, so add any column the schema has gained since.
   const wanted = SCHEMA.match(/CREATE TABLE IF NOT EXISTS contracts \(([\s\S]*?)\n\);/)?.[1] ?? "";
@@ -222,6 +246,62 @@ export const sqliteStore: Store = {
       d.exec("COMMIT");
     } catch (e) { d.exec("ROLLBACK"); throw e; }
     return { added };
+  },
+
+  async saveStateGrants(rows: StateGrantRow[], replace: { years: true } | { programs: string[] } | null) {
+    const d = open();
+    const at = now();
+    const cols = ["state", "financial_year", "id", "program_id", "agency", "agency_code", "program", "sub_program", "purpose", "recipient", "recipient_abn",
+      "pooled", "recipient_type", "category", "assistance", "funding_source", "value", "agreement_total", "start", "end", "delivery_lga",
+      "fields", "source_url", "first_seen", "last_seen"];
+    const updates = cols.filter((c) => !["state", "financial_year", "id", "first_seen"].includes(c)).map((c) => `${c} = excluded.${c}`);
+    const insert = d.prepare(`INSERT INTO state_grants (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(",")})
+      ON CONFLICT(state, financial_year, id) DO UPDATE SET ${updates.join(", ")}`);
+    const count = () => Number(d.prepare("SELECT COUNT(*) AS n FROM state_grants").get().n);
+    const before = count();
+    const years = new Set<string>();
+    let state = "";
+    d.exec("BEGIN");
+    try {
+      for (const r of rows) {
+        const g = r.grant;
+        insert.run(r.state, r.year, r.id, r.programId, g.agency, g.agencyCode, g.program, g.subProgram, g.purpose, g.recipient, g.recipientAbn,
+          g.pooled ? 1 : 0, g.recipientType, g.category, g.assistance, g.fundingSource, r.value, g.agreementTotal, g.start, g.end, g.deliveryLga,
+          JSON.stringify(r.fields), r.sourceUrl, at, at);
+        years.add(`${r.state}|${r.year}`);
+        state = r.state;
+      }
+      const afterUpserts = count();
+      // A line the source no longer carries, within what this load is the whole of, has been taken down.
+      let removed = 0;
+      if (replace && "years" in replace) {
+        const trim = d.prepare("DELETE FROM state_grants WHERE state = ? AND financial_year = ? AND last_seen < ?");
+        for (const y of years) { const [st, year] = y.split("|"); removed += Number(trim.run(st, year, at).changes); }
+      } else if (replace && "programs" in replace && state) {
+        const trim = d.prepare("DELETE FROM state_grants WHERE state = ? AND program_id = ? AND last_seen < ?");
+        for (const programId of replace.programs) removed += Number(trim.run(state, programId, at).changes);
+      }
+      d.exec("COMMIT");
+      return { added: afterUpserts - before, removed };
+    } catch (e) { d.exec("ROLLBACK"); throw e; }
+  },
+
+  async stateGrantPrograms(state: string) {
+    return open().prepare(`SELECT program_id AS programId, COUNT(*) AS count, SUM(value) AS total FROM state_grants
+      WHERE state = ? GROUP BY program_id`).all(state).map((r) => ({ programId: r.programId as string, count: Number(r.count), total: Number(r.total) }));
+  },
+
+  async stateGrantRows(state: string): Promise<StateGrantRow[]> {
+    return open().prepare("SELECT * FROM state_grants WHERE state = ? ORDER BY financial_year, id").all(state).map((r) => ({
+      state: r.state, year: r.financial_year, id: r.id, programId: r.program_id, sourceUrl: r.source_url, value: Number(r.value),
+      fields: JSON.parse(r.fields),
+      grant: {
+        agency: r.agency, agencyCode: r.agency_code, program: r.program, subProgram: r.sub_program, purpose: r.purpose,
+        recipient: r.recipient, recipientAbn: r.recipient_abn, pooled: !!r.pooled, recipientType: r.recipient_type, category: r.category,
+        assistance: r.assistance, fundingSource: r.funding_source, value: Number(r.value), agreementTotal: r.agreement_total,
+        start: r.start, end: r.end, deliveryLga: r.delivery_lga,
+      },
+    }));
   },
 
   async saveReleases(rows: Release[]) {
@@ -371,6 +451,7 @@ export const sqliteStore: Store = {
       fuelPrices: count("fuel_prices"),
       apsRows: count("aps_headcount"), apsReleases: Number(d.prepare("SELECT COUNT(DISTINCT release) AS n FROM aps_headcount").get().n),
       expenses: count("ipea_expenses"),
+      stateGrants: count("state_grants"),
       contractReleases: count("contract_releases"),
       lastRun: run ? { startedAt: run.started_at, finishedAt: run.finished_at, ok: !!run.ok, saved: run.saved, failed: run.failed } : null,
     };

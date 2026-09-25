@@ -9,7 +9,7 @@ export function DevBanner() {
       So far it collects: ABS and RBA economic indicators; Commonwealth revenue, Budget and net debt
       figures from Treasury and Finance; the Tax Office’s corporate tax transparency list; Commonwealth
       contract notices from AusTender and grant awards from GrantConnect; state contract registers for
-      NSW, VIC, QLD, WA, NT, TAS and ACT; and migration statistics from Home Affairs and the ABS. Figures are copied from the official publishers and may be
+      NSW, VIC, QLD, WA, NT, TAS and ACT; state grant awards from NSW’s Grants and Funding Finder, Queensland’s whole-of-government payments file and Lotterywest; and migration statistics from Home Affairs and the ABS. Figures are copied from the official publishers and may be
       incomplete, late, or missing where a source did not answer. Nothing here is checked by hand yet.{" "}
       <Link href="/sources">See what each source provides and its current status.</Link>
     </aside>

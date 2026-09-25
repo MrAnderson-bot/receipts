@@ -33,6 +33,7 @@ Needs Node 22.5 or later. See `HANDOVER.md` for project status, the database, ho
 - `/spending`: late reporting, limited tender share and reasons, overseas suppliers, top agencies and suppliers, largest contracts (`/spending/7`, `/spending/90`; 30 days by default)
 - `/categories`: what the money buys, by UNSPSC segment, split into services and goods, with the biggest buyer and seller in each
 - `/grants`: Commonwealth grant awards by category, selection process, agency, recipient and state (`/grants/7`, `/grants/90`)
+- `/state-grants`: state grant payments: agencies, recipients, programs, categories, assistance types, funding source, change on the year before. NSW's Grants and Funding Finder awards, Queensland's whole-of-government file and Lotterywest's approved grants for WA (`/state-grants/NSW`, `/state-grants/QLD`, `/state-grants/WA`); the other five jurisdictions are listed with why they can't be read
 - `/expenses`: parliamentarians' work expenses for the latest quarter (IPEA), against the same quarter a year earlier: by category, party and state, the 20 biggest spenders with their category split, and the largest single lines, each linked to IPEA's report for that person
 - `/states`: state and territory contracts (`/states/VIC`, `/states/QLD` and so on; NSW by default), plus the state with no usable data and why
 - `/fuel`: fuel prices per state from each state's price reporting scheme: median and cheapest unleaded and diesel, the cheapest stations, and which schemes still need an API key
@@ -70,6 +71,9 @@ One module per source in `lib/sources`, all returning the shapes in `lib/sources
 | `states/nt.ts` | NT tenders site export of awarded contracts (xlsx), listed on data.nt.gov.au | state contracts, last 12 months |
 | `states/tas.ts` | Tasmanian tenders site, awarded list plus one page per contract (HTML) | state contracts, rolling 30 days |
 | `states/act.ts` | ACT Notifiable Invoices Register on data.act.gov.au (Socrata API, CC BY 4.0) | invoices of $25,000 and over, last 12 months |
+| `state-grants/qld.ts` | Queensland Treasury's consolidated grants and frontline service procurement expenditure file (QGIP), one CSV per financial year on data.qld.gov.au (CC BY 4.0) | every state grant and program payment in the latest financial year, stored one row each in `state_grants`; totals for the year before |
+| `state-grants/nsw.ts` | nsw.gov.au Grants and Funding Finder: its search index for every grant, and its public GraphQL API for each grant's published awards (CC BY 4.0) | every award published on the finder since 2022: grant, agency, recipient, project, amount, decision date and maker, applicants and recipients, locations. Walked incrementally by the nightly job under a rate rule, so the page reads the nightly snapshot only |
+| `state-grants/wa.ts` | Lotterywest's grant recipients page, read through the JSON endpoint the page itself uses (no open licence stated) | every grant Lotterywest approved in the last year: organisation, purpose, amount, region, approval date. Lotterywest only, not WA departments |
 | `finance-sales.ts` | Department of Finance "Past sales" page (HTML, CC BY 4.0) | every Commonwealth business sold since 1988: month, proceeds, trade sale or share offer |
 | `tvfy.ts` | They Vote For You API (OpenAustralia Foundation, CC BY-SA; built from Hansard, not a government publisher) | current MPs and senators, divisions attended, rebellions. Needs `TVFY_API_KEY` |
 | `apsc.ts` | APS Employment Database releases on data.gov.au, xlsx (CC BY 3.0 AU) | APS headcount by agency, gender and classification per half-yearly snapshot; totals by gender since 2006 |
@@ -134,6 +138,57 @@ To add a state, write a loader that returns `StateSummary` and add it to `LOADER
 - The download is slow (10 to 20 seconds), so the parsed summary is cached for six hours.
 - One-off/ad hoc grants have a blank selection process. "Late" is measured from the grant start date,
   a stand-in for the day the agreement took effect.
+
+## Things to know about state grants
+
+- Only Queensland publishes a whole-of-government list of grant payments. Treasury collects every department's
+  lines each year and posts one consolidated CSV per financial year (2012-13 onward) on data.qld.gov.au. The
+  loader takes the newest year in full and the year before for its totals.
+- NSW has no file either, but its Grants and Funding Finder is a register: the Grants Administration Guide makes
+  agencies publish each award on the grant's finder page within 45 days, and those awards sit behind the site's
+  public GraphQL endpoint (`POST /graphql`, the finder's own queries copied from its `grant-recipients` script).
+  The site sits behind a CloudFront rate rule: three readers at once were blocked outright after five minutes
+  (a 403 on everything for a while), one reader at a request or two a second never was. So NSW is walked
+  incrementally by the nightly job, never by a page. Each night: list every grant from the finder's search index
+  (`/api/v1/elasticsearch/prod_content/_search`, `type:grant`, about 1,900); ask each grant's published recipient
+  count and total, 16 grants a query (the endpoint caps query complexity at 50 and refuses introspection), about
+  120 requests; compare with what `state_grants` holds per program; re-read only the grants that differ, new
+  ones first, up to `NSW_GRANT_BUDGET` a night (default 250, a few hundred requests), one reader with a 500 ms
+  pause; save them with the program's stale lines removed; then build the page summary from everything stored.
+  Roughly 950 grants carry awards, 52,000 lines and $13bn since 2022, so the first fill takes about four
+  nights and the page says how many grants are still to come. The register is cumulative: every year's rows are
+  kept and the page features the last full financial year with the year before for comparison. No ABN is
+  published, so recipients group by name; individuals and any council area with five or fewer recipients are
+  pooled by the publisher. A handful of awards whose amount the API cannot serve are left out and counted; their
+  grants always look changed, so grants already read go to the back of the queue.
+- Every other jurisdiction was probed endpoint by endpoint on 25 September 2026 (open-data catalogues, finder
+  APIs, Treasury instructions, department recipient pages). None publishes a list of awards: Victoria, the ACT
+  and the NT run finders of opportunities whose records carry no recipients; Victoria's, the NT's and the ACT's
+  policies leave awards to each department's own pages or annual report; SA and Tasmania have single-program
+  lists only, the newest from 2019-20 and 2018-19. On top of that, the department sites of SA, Tasmania, the NT,
+  Victoria (business and regional development) and WA's content API all challenge or refuse non-browser clients.
+  The exact reasons shown on the page are in `lib/sources/state-grants/index.ts`.
+- WA is Lotterywest alone. Its grant recipients page lists every grant the board approved in the last year and
+  is drawn from `/api/grants/approved` on the same site (pageSize capped at 500; the loader reads oldest first).
+  It rolls forward a year at a time, so rows accumulate in the database rather than replacing a year, and there is
+  no earlier period to compare with. The value is the amount approved, not paid. The site states full copyright
+  and no open licence; the figures are shown with attribution as published public information, which the owner
+  may want to revisit.
+- Storage: `state_grants` keeps the fields every state shares as columns and every published column as JSON in
+  `fields`, keyed by state, financial year and an id: the line's position for a file republished whole (Queensland,
+  where a vanished line is deleted on the next load) or the grant's own facts for a rolling list (Lotterywest).
+- The file covers more than grants: the "Assistance type" column also holds frontline service procurement
+  (services bought from providers), concessions, loans and direct investment. The page's total is the whole file
+  and the share that is grants proper is shown separately. Payments to individuals are pooled by program under
+  a label with ABN 0: usually "Multiple" (the template's word), sometimes "Various", "Various - Confidential",
+  "Individual athletes" or "NA". The loader treats all of those as pooled.
+- The value is what was paid in the year, not the agreement's size; the agreement total to date is a separate
+  column. About two thirds of lines have no agreement dates.
+- Agencies are acronyms that change with every machinery-of-government change. Treasury's data dictionary lists the
+  set used to November 2024; the December 2024 set is typed from the Administrative Arrangements Order. Any code
+  not in the map is shown as published and listed on the page.
+- The 2023-24 file carries an extra leading "Name" column (the agency file each line came from) and dd/mm/yyyy
+  dates; 2024-25 has no "Name" column and ISO dates. Columns are read by heading, so both parse.
 
 ## Things to know about the company data
 

@@ -9,6 +9,7 @@ import { tryGetTaxByLevel } from "@/lib/sources/abs-tax";
 import { tryGetBudget } from "@/lib/sources/budget";
 import { tryGetTransparency } from "@/lib/sources/ato-transparency";
 import { tryGetState, STATE_CODES, NOT_CONNECTED as STATES_NOT_CONNECTED } from "@/lib/sources/states";
+import { tryGetStateGrants, STATE_GRANT_CODES, NOT_CONNECTED as STATE_GRANTS_NOT_CONNECTED } from "@/lib/sources/state-grants";
 import { tryGetMigration } from "@/lib/sources/migration";
 import { tryGetCrime } from "@/lib/sources/crime";
 import { tryGetHomelessness } from "@/lib/sources/homelessness";
@@ -38,6 +39,7 @@ const NOT_CONNECTED = [
     why: "Listed companies report earnings as PDF announcements. There is no open dataset, the ASX’s own data is licensed commercially, and the free feeds people use are unofficial and barred from republication. The Tax Office’s transparency list on the companies page is the open alternative.",
   },
   ...STATES_NOT_CONNECTED,
+  ...STATE_GRANTS_NOT_CONNECTED,
   ...FUEL_NOT_CONNECTED,
 ];
 
@@ -48,6 +50,7 @@ export default async function Page() {
     ...STATE_CODES.map((c) => tryGetState(c)),
   ]);
   const fuel = await Promise.all(FUEL_CODES.map((c) => tryGetFuel(c)));
+  const stateGrants = await Promise.all(STATE_GRANT_CODES.map((c) => tryGetStateGrants(c)));
   const ags = indicators.find((r) => r.id === "ags-on-issue");
   const expenses = await tryGetExpenses();
   const okIds = new Set(indicators.filter((r) => r.series).map((r) => r.id));
@@ -220,6 +223,20 @@ export default async function Page() {
         ? `${num(s.data.count)} ${s.data.noun}, ${s.data.period.toLowerCase()}, ${num(s.data.filesRead)} ${s.data.filesRead === 1 ? "file" : "files"} read${s.data.filesSkipped.length ? `, ${num(s.data.filesSkipped.length)} left out` : ""}`
         : `Not answering. ${s.error}`,
     })),
+    ...stateGrants.map((s, i) => ({
+      name: s.data ? `${s.data.name} grants: ${s.data.sourceName}` : `${STATE_GRANT_CODES[i]} grant payments`,
+      url: s.data?.sourceUrl ?? "https://data.gov.au",
+      gives: s.data?.code === "WA"
+        ? "every grant Lotterywest approved in the last year: organisation, purpose, amount, region, approval date, acquittal state (Lotterywest only, not WA departments)"
+        : s.data?.code === "NSW"
+        ? "every award published on the Grants and Funding Finder since 2022: grant, agency, recipient, project, amount, decision date, decision maker, ministerial discretion, applicants and recipients, locations"
+        : "every grant, concession, loan and frontline-service payment by a state agency in a financial year: recipient, ABN, agency, program, purpose, category, recipient type, assistance type, funding source, agreement dates and totals",
+      licence: s.data?.licence ?? "CC BY 4.0",
+      ok: !!s.data,
+      status: s.data
+        ? `${num(s.data.count)} payment lines, ${s.data.period.toLowerCase()}${s.data.previous ? `, and totals for ${s.data.previous.year.slice(2)}` : ""}`
+        : `Not answering. ${s.error}`,
+    })),
     ...fuel.map((f, i) => {
       const code = FUEL_CODES[i];
       const key = keyNeeded(code);
@@ -304,6 +321,7 @@ export default async function Page() {
             are kept daily as snapshots.
             APS headcount cells stored one row each: {num(db.apsRows)} across {num(db.apsReleases)} snapshots.
             Parliamentarians’ expense lines stored one row each, every column as IPEA published it: {num(db.expenses)}.
+            State grant payment lines stored one row each, every column as the state published it: {num(db.stateGrants)}.
           </p>
           <p className="note" style={{ marginTop: 12 }}>
             {db.lastRun

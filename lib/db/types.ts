@@ -6,6 +6,7 @@ import type { Contract, Notice, Release } from "../sources/austender";
 import type { FuelPrice } from "../sources/fuel/types";
 import type { ApsRow } from "../sources/apsc";
 import type { ExpenseRow } from "../sources/ipea";
+import type { StateGrantRow } from "../sources/state-grants/types";
 
 export type BackfillProgress = {
   unit: string; status: "pending" | "running" | "done" | "failed"; cursor: string | null;
@@ -41,6 +42,7 @@ export type DbStats = {
   apsRows: number; // cells of the APS headcount tables, one row each
   apsReleases: number;
   expenses: number; // parliamentarians' expense lines from IPEA
+  stateGrants: number; // state grant payment lines, every published column
   contractReleases: number; // every AusTender release (original notices and amendments), every API field
   lastRun: { startedAt: string; finishedAt: string | null; ok: boolean; saved: number; failed: number } | null;
 };
@@ -76,6 +78,15 @@ export interface Store {
   saveApsHeadcount(rows: ApsRow[]): Promise<{ added: number }>;
   // Every parliamentarian expense line IPEA publishes, one row each, every column as published.
   saveExpenses(rows: ExpenseRow[]): Promise<{ added: number }>;
+  // State grant payments, one row per line of the published list: the shared fields as columns and every
+  // published column as JSON. `replace` says what the load is the whole of, so stored rows it no longer
+  // carries are removed: the years it covers (a file republished whole), the programs it re-read (a register
+  // walked program by program), or nothing (a list that rolls forward, whose rows accumulate).
+  saveStateGrants(rows: StateGrantRow[], replace: { years: true } | { programs: string[] } | null): Promise<{ added: number; removed: number }>;
+  // What is stored per program for a state (line count and total), to find the programs a source has changed.
+  stateGrantPrograms(state: string): Promise<{ programId: string; count: number; total: number }[]>;
+  // Every stored line for a state, for building the page summary from the database.
+  stateGrantRows(state: string): Promise<StateGrantRow[]>;
   // One row per contract per release from the AusTender API, every field, keyed by release id and CN id.
   saveReleases(rows: Release[]): Promise<{ added: number }>;
   // Backfill bookkeeping: one row per unit (e.g. contracts:FY2025-26), with the cursor a walked unit reached.

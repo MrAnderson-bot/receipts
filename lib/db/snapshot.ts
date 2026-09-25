@@ -10,6 +10,8 @@ import { tryGetBudget } from "../sources/budget";
 import { tryGetTransparency, loadAllEntities } from "../sources/ato-transparency";
 import { tryGetProfits } from "../sources/abs-profits";
 import { tryGetState, STATE_CODES } from "../sources/states";
+import { loadStateGrantsFull, STATE_GRANT_CODES } from "../sources/state-grants";
+import { snapshotNsw, NSW_BUDGET_DEFAULT } from "../sources/state-grants/nsw";
 import { loadFuelFeed, keyNeeded, feedKeyNeeded, FUEL_FEEDS } from "../sources/fuel";
 import { tryGetMigration } from "../sources/migration";
 import { tryGetCrime } from "../sources/crime";
@@ -203,6 +205,22 @@ export async function runSnapshot(): Promise<RunResult[]> {
       const d = need(await tryGetState(code));
       await store.saveSnapshot("state", code, d);
       return `${d.count} ${d.noun}`;
+    });
+  }
+
+  // State grants: the summary is kept as a snapshot and every payment line goes into state_grants.
+  for (const code of STATE_GRANT_CODES) {
+    await step(`state-grants:${code}`, async () => {
+      if (code === "NSW") {
+        // Incremental: the finder is walked a few hundred grants a night (NSW_GRANT_BUDGET) to stay under its rate rule.
+        const { summary, detail } = await snapshotNsw(store, Number(process.env.NSW_GRANT_BUDGET ?? NSW_BUDGET_DEFAULT));
+        await store.saveSnapshot("state-grants", code, summary);
+        return detail;
+      }
+      const { summary, rows, replaceYears } = await loadStateGrantsFull(code as Exclude<typeof code, "NSW">); // uncached: the rows are too big for the page cache
+      await store.saveSnapshot("state-grants", code, summary);
+      const { added, removed } = await store.saveStateGrants(rows, replaceYears ? { years: true } : null);
+      return `${summary.count} lines, ${summary.year}${added ? `, ${added} new rows` : ""}${removed ? `, ${removed} rows the publisher removed` : ""}`;
     });
   }
 
