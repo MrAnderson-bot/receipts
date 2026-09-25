@@ -3,7 +3,7 @@
 // in $ billion, each with the month of sale. The page is plain HTML with three
 // tables; the third (scoping studies) is not a sale and is skipped.
 import { unstable_cache } from "next/cache";
-import { USER_AGENT } from "../xlsx";
+import { httpGet } from "./fuel/http";
 import { governmentOn, type Government } from "../governments";
 import { buyerFor, type Buyer } from "./asset-sale-buyers";
 
@@ -92,12 +92,13 @@ export function parseSales(html: string): AssetSale[] {
   return sales.sort((a, b) => a.year - b.year);
 }
 
-// The page is a quarter of a megabyte, too big for Next's fetch cache (which overflows the stack storing it),
-// so the download is not cached and the parsed list is, below.
+// The page is a quarter of a megabyte, too big for Next's fetch cache, and an uncached fetch is refused
+// inside the static build (it showed as "fetch failed" on the VM), so it is read with plain Node HTTPS and
+// only the parsed list is cached, below.
 async function load(): Promise<AssetSales> {
-  const res = await fetch(SALES_URL, { headers: { "User-Agent": USER_AGENT }, cache: "no-store" });
-  if (!res.ok) throw new Error(`finance.gov.au returned ${res.status}`);
-  const sales = parseSales(await res.text());
+  const res = await httpGet(SALES_URL);
+  if (res.status !== 200) throw new Error(`finance.gov.au returned ${res.status}`);
+  const sales = parseSales(res.body);
   if (sales.length < 10) throw new Error(`Only ${sales.length} sales read from the Finance page; its layout may have changed`);
 
   const decades = new Map<string, { decade: string; value: number; count: number }>();
