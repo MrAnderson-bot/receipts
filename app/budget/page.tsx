@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { tryGetBudget } from "@/lib/sources/budget";
 import { tryGetAssetSales } from "@/lib/sources/finance-sales";
+import { governmentLabel, GOVERNMENTS_SOURCE } from "@/lib/governments";
 import type { YearValue } from "@/lib/sources/treasury";
 import type { Series } from "@/lib/sources/types";
 import { tryGetAgs } from "@/lib/sources/aofm";
@@ -203,8 +204,54 @@ export default async function Page() {
             <p className="note">
               Trade sales and public share offers managed by the Commonwealth, as the Department of Finance lists them.
               Property sales and sales run by agencies themselves are not on the list. Proceeds are as published at the
-              time and not adjusted for inflation.
+              time and not adjusted for inflation. The seller is always the Commonwealth; the government column is the
+              government in office in the month the sale finished, and the unit that ran the sale is from the page’s own
+              history note. The page does not say who bought each asset, so the buyer column was gathered by hand, one sale at
+              a time, from the record that names the purchaser (usually the Audit Office’s report on the sale), and each
+              entry links to that record.
             </p>
+
+            <h3>By government</h3>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Government</th>
+                    <th scope="col">In office</th>
+                    <th scope="col" className="num">Sales</th>
+                    <th scope="col" className="num">Proceeds</th>
+                    <th scope="col">Largest</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sales.data.byGovernment.map((g) => (
+                    <tr key={g.from}>
+                      <td>{g.pm} <span className="desc">{g.party}</span></td>
+                      <td>{period(g.from)} to {g.to ? period(g.to) : "now"}</td>
+                      <td className="num">{num(g.count)}</td>
+                      <td className="num">{money(g.value)}</td>
+                      <td>{g.largest ? `${g.largest.name}, ${money(g.largest.proceeds!)}` : "–"}</td>
+                    </tr>
+                  ))}
+                  {sales.data.byParty.map((p) => (
+                    <tr key={p.party}>
+                      <td><strong>All {p.party} governments</strong></td>
+                      <td></td>
+                      <td className="num">{num(p.count)}</td>
+                      <td className="num">{money(p.value)}</td>
+                      <td></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="note">
+              Government dates are the day each prime minister was sworn in, from the National Archives’ list
+              (<a href={GOVERNMENTS_SOURCE} target="_blank" rel="noreferrer">Australia’s prime ministers</a>). A sale
+              is credited to the government in office when it finished; many were prepared under the government before.
+            </p>
+
+            <h3>Every sale</h3>
             <div className="table-wrap">
               <table>
                 <thead>
@@ -212,6 +259,9 @@ export default async function Page() {
                     <th scope="col">When</th>
                     <th scope="col">What was sold</th>
                     <th scope="col">How</th>
+                    <th scope="col">Government</th>
+                    <th scope="col">Run by</th>
+                    <th scope="col">Bought by</th>
                     <th scope="col" className="num">Proceeds</th>
                   </tr>
                 </thead>
@@ -224,6 +274,24 @@ export default async function Page() {
                         {s.note && <div className="desc">{s.note}</div>}
                       </td>
                       <td>{s.kind}</td>
+                      <td>{governmentLabel(s.government)}</td>
+                      <td><div className="desc">{s.managedBy}</div></td>
+                      <td>
+                        {s.kind === "share offer" ? (
+                          <span className="desc">investors, by public share offer</span>
+                        ) : s.buyer ? (
+                          <>
+                            {s.buyer.buyer}
+                            <div className="desc">
+                              <a href={s.buyer.sourceUrl} target="_blank" rel="noreferrer">{s.buyer.sourceName}</a>
+                              {!s.buyer.official && ", not an official record"}
+                              {s.buyer.note && `. ${s.buyer.note}`}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="desc">not traced</span>
+                        )}
+                      </td>
                       <td className="num">{s.proceeds !== null ? money(s.proceeds) : "not stated"}</td>
                     </tr>
                   ))}

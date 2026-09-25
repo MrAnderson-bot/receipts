@@ -34,7 +34,7 @@ and `docs/launch-tools/` are owner-only and git-ignored.
 | `/economy` | Recession watch (five signals with fixed rules, no invented probability), then 35 indicators with history: recession signals (Sahm rule, yield curve, 10-year bond), growth, prices and rates, cost of living (real wages, rents, electricity, gas, groceries, fuel, new mortgage rate, mean home price, household debt to income, credit card debt), housing supply (approvals, completions, population growth, new residents per new dwelling), jobs (unemployment, participation, underemployment, wages, productivity, profits), households, government investment and gross debt as shares of GDP |
 | `/scorecard` | Government scorecard: 26 KPIs in six groups (affordability, housing supply, jobs and growth, budget and debt, investment, procurement), each a fixed rule over an official figure, met/missed/no data. Score out of 100 = share of readable rules met, per group and overall, plus the same over the government's published targets only; every missed rule says what has to change, listed weakest group first as "what would lift the score". Design, rules and gaps in `docs/kpi-scorecard.md` |
 | `/revenue` | Commonwealth receipts by source, share of GDP, taxes by level of government |
-| `/budget` | Budget balance, expenses by function, net debt, largest programs |
+| `/budget` | Budget balance, expenses by function, net debt, largest programs, gross debt, and every Commonwealth asset sale since 1987 with the government of the day, totals by government and by party, the unit that ran the sale, and the buyer of every trade sale with the official record that names it (hand-gathered list in `lib/sources/asset-sale-buyers.ts`, method in `docs/asset-sale-buyers.md`) |
 | `/companies` | Tax Office transparency list (about 4,100 large companies), company profits by industry |
 | `/spending` | Commonwealth contracts: late reporting, limited tender, agencies, suppliers (nav label "Contracts"). `/spending/7`, `/spending/90` for other ranges |
 | `/categories` | What contracts buy, by UNSPSC segment (same `/7`, `/90` ranges) |
@@ -64,6 +64,11 @@ and `docs/launch-tools/` are owner-only and git-ignored.
   published target (Housing Accord, inflation band, gross debt trajectory) or our yardstick. Thresholds are
   constants at the top of the file and the rule text is built from them. Why each rule exists, what data it
   needs and what isn't tracked yet is in `docs/kpi-scorecard.md`; record any threshold change there with the date.
+- `docs/backfill.md`: the plan for filling the whole history, source by source, one unit a night inside the
+  publish. Read it before adding history to anything; it records what each publisher offers and the disk rules.
+- `lib/governments.ts`: federal governments by date (prime minister, party, sworn-in dates, National Archives
+  source) with `governmentOn(date)`. Used to label asset sales with the government of the day; reuse it for
+  anything else that needs "under which government". Dates only, no judgement in the wording.
 - `lib/recession.ts`: the recession watch. Five signals (Sahm rule, yield curve, GDP, GDP per person, real household
   spending), each a fixed rule over a stored series with watch and triggered thresholds, summed into Low, Elevated or
   High. It is a checklist, not a model; the method text on the page is the contract. Change a threshold there and
@@ -170,6 +175,9 @@ This replaces the Supabase and Vercel Cron route above unless there is a reason 
   Finance publish the same figures under CC BY.
 - **Cloudflare's crawler can't reach Victoria, SA or ACT tender sites.** It identifies itself as a bot and is
   challenged like any other program.
+- **Asset sale buyers are a hand-gathered list** (`lib/sources/asset-sale-buyers.ts`), because no official page names
+  purchasers in one place. Every entry links to the ANAO report, Hansard or ministerial release that names the buyer;
+  a sale with no entry shows "not traced". Method and rules in `docs/asset-sale-buyers.md`.
 - **Victoria is a hand-gathered snapshot** (`data/states/vic.txt`), read in a real Chrome session, contracts of $5M
   and over only. It does not update itself. The refresh steps are in the README. Contact names, emails and phone
   numbers on those pages are deliberately not collected.
