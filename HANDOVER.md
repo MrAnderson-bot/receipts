@@ -156,15 +156,15 @@ This replaces the Supabase and Vercel Cron route above unless there is a reason 
   Cloudflare Pages, back the database up to Cloud Storage), and the systemd timer at 04:30 Canberra time. The pages
   still read the live sources at build time; reading from the database (step 4 below) is a later improvement, not a
   blocker.
-- **Live since 22 September 2026**, all under the owner's personal accounts (a personal Google account), never the
-  company's, and everything in Sydney:
+- **Live since 22 September 2026**, all under the owner's own accounts, never a company's, and everything in Sydney.
+  Account, project, VM and bucket names are in the owner-only `docs/HANDOVER-launch.md` (git-ignored):
   - Public site: https://receipts-byv.pages.dev (Cloudflare Pages project `receipts`, classic Pages, created with
     `--force` because wrangler otherwise tries to convert a Next.js app to its Workers adapter and edits the repo;
     if that ever happens again, revert `next.config.mjs`, `package.json` and delete `wrangler.jsonc`,
     `open-next.config.ts`, `public/_headers`, `.dev.vars`).
-  - Google Cloud project the project, VM `receipts-engine` (e2-micro, `australia-southeast1-b`, Debian 12,
-    about AUD 10-12 a month), bucket `the backup bucket`. The default SSH/RDP/ICMP firewall rules are
-    deleted; SSH only through IAP: `gcloud compute ssh receipts-engine --zone australia-southeast1-b --tunnel-through-iap`.
+  - One Google Cloud project with one VM (e2-micro, `australia-southeast1-b`, Debian 12, about AUD 10-12 a month)
+    and one backup bucket. The default SSH/RDP/ICMP firewall rules are deleted; SSH only through IAP:
+    `gcloud compute ssh <vm> --zone australia-southeast1-b --tunnel-through-iap`.
   - On the VM: repo at `/opt/receipts`, job user `receipts`, `receipts-publish.timer` at 04:30 Canberra time. Secrets
     in `/etc/receipts.env`. Logs: `journalctl -u receipts-publish`.
   - Until the VM has a Cloudflare API token in `/etc/receipts.env`, deploy by hand from the dev machine:

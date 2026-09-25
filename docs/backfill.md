@@ -153,7 +153,7 @@ So the VM stays as it is. Two rules that must hold:
 
 1. **Bucket lifecycle.** `deploy/publish.sh` copies the database to the bucket every night under a dated name
    and never deletes. With a 3 GB file that is 90 GB a month, growing forever. Set a lifecycle rule on
-   `the backup bucket` to delete objects older than 14 days before the contracts backfill
+   the backup bucket (named in the owner-only `docs/HANDOVER-launch.md`) to delete objects older than 14 days before the contracts backfill
    starts. About 45 GB at most, roughly a dollar a month in Sydney.
 2. **Station rows stay daily-only.** The fuel history units store state-level figures, never station rows.
    The one existing exception (today's station prices, replaced daily) stays the only one.
