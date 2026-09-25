@@ -15,9 +15,9 @@ cd "$APP_DIR" && node -e '
   const { DatabaseSync } = require("node:sqlite");
   try {
     const db = new DatabaseSync("data/receipts.db", { readOnly: true });
-    const rows = db.prepare("select unit, status, rows_added, calls, substr(coalesce(cursor, \"\"), 1, 10) cursor, substr(coalesce(finished, started, \"\"), 1, 16) at from backfill_progress order by started desc").all();
+    const rows = db.prepare("select unit, status, rows_added, calls, cursor, started, finished from backfill_progress order by started desc").all();
     console.log("units:");
-    for (const r of rows) console.log("  " + r.unit + "  " + r.status + "  " + r.rows_added + " rows  " + r.calls + " calls  cursor " + r.cursor + "  " + r.at);
+    for (const r of rows) console.log("  " + r.unit + "  " + r.status + "  " + r.rows_added + " rows  " + r.calls + " calls  cursor " + String(r.cursor || "-").slice(0, 10) + "  " + String(r.finished || r.started || "").slice(0, 16));
     console.log("contract releases stored: " + db.prepare("select count(*) n from contract_releases").get().n);
   } catch (e) { console.log("no progress table yet: " + e.message); }
 ' 2>/dev/null
