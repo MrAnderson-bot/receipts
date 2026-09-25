@@ -39,6 +39,7 @@ and `docs/launch-tools/` are owner-only and git-ignored.
 | `/categories` | What contracts buy, by UNSPSC segment (same `/7`, `/90` ranges) |
 | `/grants` | Commonwealth grant awards (same ranges) |
 | `/states` | NSW, VIC, QLD, WA, NT, TAS contracts and ACT invoices. `/states/QLD` etc. |
+| `/fuel` | Fuel prices per state from the state price reporting schemes: median and cheapest unleaded and diesel, cheapest stations, and which schemes are waiting on a key. WA and Queensland work without one |
 | `/migration` | Net overseas migration, temporary visa holders, permanent program, skilled and working holiday grants, citizenship by country |
 | `/crime` | Victims of recorded crime by offence and state (ABS, since 1993), offenders by principal offence and state (ABS, since 2008-09), people homeless on Census night (ABS) and people helped by homelessness services with reasons (AIHW, since 2011-12) |
 | `/sources` | Every feed with live status, database totals, and what isn't connected |
@@ -75,6 +76,7 @@ yet; they still read the live sources. It is ignored by git and can be rebuilt a
 | `observations` | `series_id`, `period`, `value`, `first_seen`, `last_seen`. If a publisher revises a period, the new value is a new row, so the old value is kept. The current value for a period is the row with the latest `last_seen` |
 | `snapshots` | One JSON summary per `source`, `key` and day: contracts and grants (7, 30, 90 days), each state, budget, revenue, companies, company profits, tax by level |
 | `companies` | The full Tax Office list: `abn`, `name`, `income_year`, `income`, `taxable`, `tax`. Indexed by ABN for joining to suppliers and grant recipients |
+| `fuel_prices` | Every station's current price, one row per state, station and fuel, every field the scheme gives. **Replaced each day, not accumulated**: it is the one deliberate exception to keeping every record, because six states of stations at several fuels each is thousands of rows a day and the VM's disk is small. The daily history is the state-level `fuel` snapshot (median, cheapest, dearest and station count per fuel). Revisit if the database moves off the VM |
 | `runs` | Each snapshot run: times, how many sources saved or failed, and the detail |
 
 Period formats: `2026-07` monthly, `2026-Q2` quarterly, `2026-09-18` daily, `FY2024-25` financial year (the prefix
@@ -198,6 +200,21 @@ arrive in the next Budget's tables). WA's newest open contract file is 2023-24. 
    (Cloudflare Pages: Edit, on the personal account) and the account id `2779902e70532b99496bfced7aa61ebf` into
    `/etc/receipts.env` on the VM, then `sudo systemctl start receipts-publish.service` and check the log. Until
    then, `npm run snapshot` on the dev machine keeps history accumulating.
+   **Fuel API keys to register**, also for `/etc/receipts.env`, each on the personal account, never a company one.
+   Every keyed scheme is read at most three times a day (eight-hour cache, and a failure waits eight hours too):
+   - NSW FuelCheck v2 (`FUELCHECK_NSW_KEY`, `FUELCHECK_NSW_SECRET`) at https://api.nsw.gov.au/Product/Index/22.
+     Also covers Tasmania from the same response. 2 calls a load (token, then all prices), at most 6 a day, about
+     180 a month against a free tier of 2,400.
+   - Queensland live API (`FUEL_QLD_KEY`) at https://www.fuelpricesqld.com.au/. About 4 or 5 calls a day (prices
+     three times, stations once, reference lists weekly). Without it the monthly file on data.qld.gov.au is used,
+     two requests a day, no key.
+   - South Australia (`FUEL_SA_KEY`) at https://www.safuelpricinginformation.com.au/publishers.html. Same API
+     as Queensland's live feed, about 4 or 5 calls a day.
+   - Victoria's Servo Saver (`FUEL_VIC_CONSUMER_ID`, and the endpoint URL from the approval email as
+     `FUEL_VIC_URL`) at https://service.vic.gov.au/find-services/transport-and-driving/servo-saver/help-centre/servo-saver-public-api.
+     1 call a load, at most 3 a day. The response layout is unconfirmed until the first live run.
+   WA FuelWatch needs nothing (5 RSS requests once a day, one per fuel; the unfiltered feed is statewide). The NT has no feed and the ACT has no scheme. Until a
+   key is in place the fuel page and the sources page say so for that state, in those words.
 3. **Per-record tables, matching the government's records one-to-one.** Done for contracts on 22 September 2026:
    the `contracts` table holds one row per notice from the API, and the nightly job then reads each notice's public
    page for the fields the API leaves out (execution date, extension options, max end date, ATM ID, "Australian

@@ -30,6 +30,7 @@ Needs Node 22.5 or later. See `HANDOVER.md` for project status, the database, ho
 - `/categories`: what the money buys, by UNSPSC segment, split into services and goods, with the biggest buyer and seller in each
 - `/grants`: Commonwealth grant awards by category, selection process, agency, recipient and state (`/grants/7`, `/grants/90`)
 - `/states`: state and territory contracts (`/states/VIC`, `/states/QLD` and so on; NSW by default), plus the state with no usable data and why
+- `/fuel`: fuel prices per state from each state's price reporting scheme: median and cheapest unleaded and diesel, the cheapest stations, and which schemes still need an API key
 - `/migration`: net overseas migration (ABS), temporary visa holders by category, permanent Migration Program outcomes, skilled and working holiday visas granted, NOM by visa category and new citizens by former citizenship (Home Affairs)
 - `/crime`: victims of recorded crime by offence since 1993 and offenders by principal offence since 2008-09, counts and rates per 100,000, Australia and each state (ABS); people homeless on Census night (ABS) and people helped by homelessness services each year, by state, with the reasons they asked (AIHW)
 - `/sources`: every feed, its licence, whether it answered, and what isn't connected yet
@@ -63,6 +64,12 @@ One module per source in `lib/sources`, all returning the shapes in `lib/sources
 | `states/wa.ts` | Tenders WA award CSV on data.wa.gov.au (CC BY 4.0) | state contracts, latest released financial year |
 | `crime.ts` | ABS Recorded Crime – Victims and Offenders publication spreadsheets, found from each release page (CC BY 4.0) | victims by offence, year and state with rates; offenders by principal offence, year and state with rates |
 | `homelessness.ts` | AIHW Specialist Homelessness Services tables, found through the report's download API, and the ABS Estimating Homelessness Census table (both CC BY 4.0) | service clients per year and per 10,000 by state, reasons for seeking help; Census homeless count and rate by living situation and state |
+| `fuel/wa.ts` | FuelWatch RSS feed, no key | today's price at every WA station, metro and regional |
+| `fuel/qld.ts` | Queensland Fuel Price Reporting: monthly CSV on data.qld.gov.au (CC BY 4.0), or the live API with `FUEL_QLD_KEY` | each station's latest price |
+| `fuel/nsw.ts` | NSW FuelCheck API v2 with `FUELCHECK_NSW_KEY` and `FUELCHECK_NSW_SECRET` | current prices in NSW and Tasmania (FuelCheck TAS) |
+| `fuel/sa.ts` | SA Fuel Pricing Information Scheme API with `FUEL_SA_KEY` | current prices in SA |
+| `fuel/vic.ts` | Servo Saver Public API with `FUEL_VIC_CONSUMER_ID` and `FUEL_VIC_URL` | current prices in Victoria |
+| `fuel/fpdapi.ts` | the Fuel Price Data API client shared by Queensland's live feed and South Australia | |
 | `ato-transparency.ts` | ATO Corporate Tax Transparency on data.gov.au, xlsx (CC BY 3.0 AU) | each large company's total income, taxable income, tax payable |
 | `abs-profits.ts` | ABS Business Indicators via the Data API (CC BY 4.0) | company gross operating profits by industry, quarterly |
 | `abs-tax.ts` | ABS Taxation Revenue, Australia, xlsx (CC BY 4.0) | taxes by level of government |

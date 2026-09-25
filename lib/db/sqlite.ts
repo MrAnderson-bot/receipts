@@ -4,6 +4,7 @@ import { mkdirSync } from "fs";
 import path from "path";
 import type { Series } from "../sources/types";
 import { noticePageId, type Contract, type Notice } from "../sources/austender";
+import type { FuelPrice } from "../sources/fuel/types";
 import type { CompanyRow, Contradiction, DbStats, RunResult, Store } from "./types";
 
 const FILE = path.join(process.cwd(), "data", "receipts.db");
@@ -49,6 +50,12 @@ CREATE TABLE IF NOT EXISTS contracts (
 );
 CREATE INDEX IF NOT EXISTS contracts_unread ON contracts (notice_read_at, published);
 CREATE INDEX IF NOT EXISTS contracts_by_flag ON contracts (n_australian_business, value);
+CREATE TABLE IF NOT EXISTS fuel_prices (
+  state TEXT NOT NULL, site_id TEXT NOT NULL, fuel TEXT NOT NULL, fuel_raw TEXT NOT NULL,
+  name TEXT NOT NULL, brand TEXT NOT NULL, address TEXT NOT NULL, suburb TEXT NOT NULL, postcode TEXT,
+  lat REAL, lng REAL, price REAL NOT NULL, reported_at TEXT NOT NULL, captured_at TEXT NOT NULL,
+  PRIMARY KEY (state, site_id, fuel_raw)
+);
 CREATE TABLE IF NOT EXISTS runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, finished_at TEXT,
   ok INTEGER NOT NULL DEFAULT 0, saved INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0, detail TEXT
@@ -193,6 +200,21 @@ export const sqliteStore: Store = {
       .run(now(), failed === 0 ? 1 : 0, results.length - failed, failed, JSON.stringify(results), id);
   },
 
+  async saveFuelPrices(state: string, rows: FuelPrice[]) {
+    const d = open();
+    const at = now();
+    const insert = d.prepare(`INSERT OR REPLACE INTO fuel_prices
+      (state, site_id, fuel, fuel_raw, name, brand, address, suburb, postcode, lat, lng, price, reported_at, captured_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    d.exec("BEGIN");
+    try {
+      d.prepare("DELETE FROM fuel_prices WHERE state = ?").run(state);
+      for (const r of rows) insert.run(state, r.siteId, r.fuel, r.fuelRaw, r.name, r.brand, r.address, r.suburb, r.postcode, r.lat, r.lng, r.price, r.reportedAt, at);
+      d.exec("COMMIT");
+    } catch (e) { d.exec("ROLLBACK"); throw e; }
+    return rows.length;
+  },
+
   async stats(): Promise<DbStats> {
     const d = open();
     const count = (table: string) => Number(d.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n);
@@ -201,6 +223,7 @@ export const sqliteStore: Store = {
       location: path.relative(process.cwd(), FILE).replace(/\\/g, "/"),
       series: count("series"), observations: count("observations"), snapshots: count("snapshots"), companies: count("companies"),
       contracts: count("contracts"), noticesRead: count("contracts WHERE notice_read_at IS NOT NULL"),
+      fuelPrices: count("fuel_prices"),
       lastRun: run ? { startedAt: run.started_at, finishedAt: run.finished_at, ok: !!run.ok, saved: run.saved, failed: run.failed } : null,
     };
   },

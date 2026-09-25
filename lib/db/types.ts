@@ -3,6 +3,7 @@
 // methods and be returned from lib/db/index.ts.
 import type { Series, Point } from "../sources/types";
 import type { Contract, Notice } from "../sources/austender";
+import type { FuelPrice } from "../sources/fuel/types";
 
 export type CompanyRow = { abn: string; name: string; incomeYear: string; income: number; taxable: number; tax: number };
 
@@ -23,6 +24,7 @@ export type DbStats = {
   companies: number;
   contracts: number;
   noticesRead: number;
+  fuelPrices: number; // station prices held right now, one per station and fuel
   lastRun: { startedAt: string; finishedAt: string | null; ok: boolean; saved: number; failed: number } | null;
 };
 
@@ -45,6 +47,11 @@ export interface Store {
   contractsWithoutNotice(limit: number): Promise<{ id: string; pageId: string }[]>;
   saveNotice(id: string, notice: Notice): Promise<void>;
   contradictions(limit: number): Promise<Contradiction[]>;
+
+  // Fuel: every station's current price for one state, every field the scheme gives, replacing yesterday's
+  // rows for that state. Thousands of stations a day would outgrow the VM's disk if kept; the state-level
+  // history lives in snapshots instead.
+  saveFuelPrices(state: string, rows: FuelPrice[]): Promise<number>;
 
   startRun(): Promise<number>;
   finishRun(id: number, results: RunResult[]): Promise<void>;
