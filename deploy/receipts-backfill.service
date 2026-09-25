@@ -1,0 +1,21 @@
+[Unit]
+Description=Receipts: backfill history into the database, one financial year at a time
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=receipts
+WorkingDirectory=/opt/receipts
+Environment=APP_DIR=/opt/receipts
+# Root-only file; systemd reads it before dropping to the receipts user.
+EnvironmentFile=/etc/receipts.env
+ExecStart=/usr/bin/bash /opt/receipts/deploy/backfill.sh
+# The loop exits 0 when every unit is done; on any other exit it comes back after five minutes.
+Restart=on-failure
+RestartSec=300
+# The VM is small; keep the runner's heap modest.
+Environment=NODE_OPTIONS=--max-old-space-size=768
+
+[Install]
+WantedBy=multi-user.target

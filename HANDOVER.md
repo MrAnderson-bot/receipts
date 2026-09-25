@@ -70,6 +70,11 @@ and `docs/launch-tools/` are owner-only and git-ignored.
   needs and what isn't tracked yet is in `docs/kpi-scorecard.md`; record any threshold change there with the date.
 - `docs/backfill.md`: the plan for filling the whole history, source by source, one unit a night inside the
   publish. Read it before adding history to anything; it records what each publisher offers and the disk rules.
+  **Running on the VM since 25 September 2026:** `receipts-backfill.service` runs `deploy/backfill.sh`, a loop
+  that calls `npm run backfill -- contracts:FY<yyyy-yy>` newest year first (2025-26 back to 2007-08), ten
+  minutes a pass, pausing while the nightly publish runs. Check it with `.\deployackfill-status.ps1`
+  (`-Stop` and `-Start` to pause and resume); install or update it with `deploy/vm-install-backfill.sh`. The
+  backup bucket deletes copies older than 14 days (lifecycle rule set the same day).
 - `lib/governments.ts`: federal governments by date (prime minister, party, sworn-in dates, National Archives
   source) with `governmentOn(date)`. Used to label asset sales with the government of the day; reuse it for
   anything else that needs "under which government". Dates only, no judgement in the wording.
