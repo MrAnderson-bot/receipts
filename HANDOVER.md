@@ -40,6 +40,7 @@ and `docs/launch-tools/` are owner-only and git-ignored.
 | `/grants` | Commonwealth grant awards (same ranges) |
 | `/states` | NSW, VIC, QLD, WA, NT, TAS contracts and ACT invoices. `/states/QLD` etc. |
 | `/migration` | Net overseas migration, temporary visa holders, permanent program, skilled and working holiday grants, citizenship by country |
+| `/crime` | Victims of recorded crime by offence and state (ABS, since 1993), offenders by principal offence and state (ABS, since 2008-09), people homeless on Census night (ABS) and people helped by homelessness services with reasons (AIHW, since 2011-12) |
 | `/sources` | Every feed with live status, database totals, and what isn't connected |
 
 ## How the code is laid out

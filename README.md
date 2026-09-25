@@ -31,6 +31,7 @@ Needs Node 22.5 or later. See `HANDOVER.md` for project status, the database, ho
 - `/grants`: Commonwealth grant awards by category, selection process, agency, recipient and state (`/grants/7`, `/grants/90`)
 - `/states`: state and territory contracts (`/states/VIC`, `/states/QLD` and so on; NSW by default), plus the state with no usable data and why
 - `/migration`: net overseas migration (ABS), temporary visa holders by category, permanent Migration Program outcomes, skilled and working holiday visas granted, NOM by visa category and new citizens by former citizenship (Home Affairs)
+- `/crime`: victims of recorded crime by offence since 1993 and offenders by principal offence since 2008-09, counts and rates per 100,000, Australia and each state (ABS); people homeless on Census night (ABS) and people helped by homelessness services each year, by state, with the reasons they asked (AIHW)
 - `/sources`: every feed, its licence, whether it answered, and what isn't connected yet
 
 ## Database
@@ -60,6 +61,8 @@ One module per source in `lib/sources`, all returning the shapes in `lib/sources
 | `states/tas.ts` | Tasmanian tenders site, awarded list plus one page per contract (HTML) | state contracts, rolling 30 days |
 | `states/act.ts` | ACT Notifiable Invoices Register on data.act.gov.au (Socrata API, CC BY 4.0) | invoices of $25,000 and over, last 12 months |
 | `states/wa.ts` | Tenders WA award CSV on data.wa.gov.au (CC BY 4.0) | state contracts, latest released financial year |
+| `crime.ts` | ABS Recorded Crime – Victims and Offenders publication spreadsheets, found from each release page (CC BY 4.0) | victims by offence, year and state with rates; offenders by principal offence, year and state with rates |
+| `homelessness.ts` | AIHW Specialist Homelessness Services tables, found through the report's download API, and the ABS Estimating Homelessness Census table (both CC BY 4.0) | service clients per year and per 10,000 by state, reasons for seeking help; Census homeless count and rate by living situation and state |
 | `ato-transparency.ts` | ATO Corporate Tax Transparency on data.gov.au, xlsx (CC BY 3.0 AU) | each large company's total income, taxable income, tax payable |
 | `abs-profits.ts` | ABS Business Indicators via the Data API (CC BY 4.0) | company gross operating profits by industry, quarterly |
 | `abs-tax.ts` | ABS Taxation Revenue, Australia, xlsx (CC BY 4.0) | taxes by level of government |

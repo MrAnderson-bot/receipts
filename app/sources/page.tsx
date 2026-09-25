@@ -10,6 +10,8 @@ import { tryGetBudget } from "@/lib/sources/budget";
 import { tryGetTransparency } from "@/lib/sources/ato-transparency";
 import { tryGetState, STATE_CODES, NOT_CONNECTED as STATES_NOT_CONNECTED } from "@/lib/sources/states";
 import { tryGetMigration } from "@/lib/sources/migration";
+import { tryGetCrime } from "@/lib/sources/crime";
+import { tryGetHomelessness } from "@/lib/sources/homelessness";
 import { getStore, type DbStats } from "@/lib/db";
 import { num } from "@/lib/format";
 
@@ -34,9 +36,9 @@ const NOT_CONNECTED = [
 ];
 
 export default async function Page() {
-  const [indicators, spending, grants, revenue, levels, budget, companies, migration, ...states] = await Promise.all([
+  const [indicators, spending, grants, revenue, levels, budget, companies, migration, crime, homelessness, ...states] = await Promise.all([
     getIndicators(), tryGetSummary(7), tryGetGrants(7), tryGetRevenue(), tryGetTaxByLevel(),
-    tryGetBudget(), tryGetTransparency(), tryGetMigration(), ...STATE_CODES.map((c) => tryGetState(c)),
+    tryGetBudget(), tryGetTransparency(), tryGetMigration(), tryGetCrime(), tryGetHomelessness(), ...STATE_CODES.map((c) => tryGetState(c)),
   ]);
   const okIds = new Set(indicators.filter((r) => r.series).map((r) => r.id));
   const count = (ids: string[]) => `${ids.filter((id) => okIds.has(id)).length} of ${ids.length} series answering`;
@@ -128,6 +130,33 @@ export default async function Page() {
       licence: "CC BY 4.0",
       ok: !!migration.nom.data,
       status: migration.nom.data ? `To ${migration.nom.data.latest.year.replace(/^FY/, "")}` : `Not answering. ${migration.nom.error}`,
+    },
+    {
+      name: "ABS, Recorded Crime – Victims and Offenders",
+      url: "https://www.abs.gov.au/statistics/people/crime-and-justice",
+      gives: "victims of selected offences by year since 1993, counts and rates per 100,000, Australia and each state; offenders by principal offence since 2008-09, counts and rates, Australia and each state (publication spreadsheets, not the Data API)",
+      licence: "CC BY 4.0",
+      ok: !!crime.victims.data || !!crime.offenders.data,
+      status: [
+        crime.victims.data ? `victims to ${crime.victims.data.edition}` : `victims not answering (${crime.victims.error})`,
+        crime.offenders.data ? `offenders to ${crime.offenders.data.edition}` : `offenders not answering (${crime.offenders.error})`,
+      ].join("; "),
+    },
+    {
+      name: "AIHW, Specialist Homelessness Services annual report",
+      url: "https://www.aihw.gov.au/reports/homelessness-services/specialist-homelessness-services-annual-report/data",
+      gives: "people helped by homelessness services each year since 2011-12, counts and per 10,000 people, Australia and each state; reasons for seeking help (spreadsheets found through the report's download list)",
+      licence: "CC BY 4.0",
+      ok: !!homelessness.shs.data,
+      status: homelessness.shs.data ? `To ${homelessness.shs.data.latestYear.replace(/^FY/, "")}, ${homelessness.shs.data.regions.length} regions` : `Not answering. ${homelessness.shs.error}`,
+    },
+    {
+      name: "ABS, Estimating Homelessness: Census",
+      url: "https://www.abs.gov.au/statistics/people/housing/estimating-homelessness-census/latest-release",
+      gives: "people homeless on Census night, count and per 10,000, by living situation and state, 2006 to 2021",
+      licence: "CC BY 4.0",
+      ok: !!homelessness.census.data,
+      status: homelessness.census.data ? `Census ${homelessness.census.data.years[homelessness.census.data.years.length - 1]}; the 2026 Census figures are expected in 2028` : `Not answering. ${homelessness.census.error}`,
     },
     ...states.map((s, i) => ({
       name: s.data ? `${s.data.name}: ${s.data.sourceName}` : `${STATE_CODES[i]} contracts`,
