@@ -205,10 +205,13 @@ arrive in the next Budget's tables). WA's newest open contract file is 2023-24. 
    `/etc/receipts.env` on the VM, then `sudo systemctl start receipts-publish.service` and check the log. Until
    then, `npm run snapshot` on the dev machine keeps history accumulating.
    **Fuel API keys to register**, also for `/etc/receipts.env`, each on the personal account, never a company one.
-   Every keyed scheme is read at most three times a day (eight-hour cache, and a failure waits eight hours too):
+   Every keyed scheme is read at most three times a day (eight-hour cache, and a failure waits eight hours too).
+   The pages cache only the state summaries; the station rows are over Next's 2 MB cache limit, so the snapshot
+   step loads each feed once more, uncached, and stores the rows itself (the same pattern as `loadAps`):
    - NSW FuelCheck v2 (`FUELCHECK_NSW_KEY`, `FUELCHECK_NSW_SECRET`) at https://api.nsw.gov.au/Product/Index/22.
-     Also covers Tasmania from the same response. 2 calls a load (token, then all prices), at most 6 a day, about
-     180 a month against a free tier of 2,400.
+     Also covers Tasmania: one request with `states=NSW|TAS` (without that parameter the API returns NSW only).
+     2 calls a load (token, then all prices); the nightly build loads it at most twice (page render and
+     snapshot), so about 4 a day, 120 a month against a free tier of 2,500.
    - Queensland live API (`FUEL_QLD_KEY`) at https://www.fuelpricesqld.com.au/. About 4 or 5 calls a day (prices
      three times, stations once, reference lists weekly). Without it the monthly file on data.qld.gov.au is used,
      two requests a day, no key.

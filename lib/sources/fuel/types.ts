@@ -28,7 +28,7 @@ export type FuelPrice = {
   reportedAt: string; // ISO date or date-time, as the scheme gives it
 };
 
-export type FuelStat = { fuel: FuelType; label: string; median: number; cheapest: number; dearest: number; count: number };
+export type FuelStat = { fuel: FuelType; label: string; raw: string; median: number; cheapest: number; dearest: number; count: number }; // raw: the scheme's own name for the fuel
 
 export type FuelSummary = {
   code: FuelCode;
@@ -45,6 +45,10 @@ export type FuelSummary = {
   cheapest: Partial<Record<FuelType, FuelPrice[]>>; // ten cheapest stations per fuel
   prices: FuelPrice[]; // every price, for the fuel_prices table; dropped from page snapshots
 };
+
+// What the pages read: the summary without the station rows, small enough for Next's cache (2 MB).
+export type FuelPage = Omit<FuelSummary, "prices">;
+export const forPage = ({ prices, ...page }: FuelSummary): FuelPage => page;
 
 // Cents per litre a road fuel can really cost. Schemes carry entry errors (a 28.8¢ diesel, a 999.6¢ "no stock"
 // sentinel that missed the 9999 check), and one of those would become the state's cheapest or dearest price.
@@ -85,7 +89,7 @@ export function summarise(
   const stats: FuelStat[] = [...byFuel]
     .map(([fuel, ps]) => {
       const values = ps.map((p) => p.price);
-      return { fuel, label: FUEL_LABELS[fuel], median: median(values), cheapest: Math.min(...values), dearest: Math.max(...values), count: ps.length };
+      return { fuel, label: FUEL_LABELS[fuel], raw: ps[0].fuelRaw, median: median(values), cheapest: Math.min(...values), dearest: Math.max(...values), count: ps.length };
     })
     .sort((a, b) => b.count - a.count);
   const cheapest: Partial<Record<FuelType, FuelPrice[]>> = {};

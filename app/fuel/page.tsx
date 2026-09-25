@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { tryGetFuel, keyNeeded, FUEL_CODES, FUEL_LABELS, SHOWN, NOT_CONNECTED, type FuelSummary, type FuelType } from "@/lib/sources/fuel";
+import { tryGetFuel, keyNeeded, FUEL_CODES, FUEL_LABELS, SHOWN, NOT_CONNECTED, type FuelPage, type FuelType } from "@/lib/sources/fuel";
 import { PLAUSIBLE } from "@/lib/sources/fuel/types";
 import { num, period } from "@/lib/format";
 
@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Fuel" };
 // 195.9 -> "195.9¢", the way every scheme and every forecourt shows it.
 const cents = (c: number) => `${c.toFixed(1)}¢`;
 
-function StateSection({ data }: { data: FuelSummary }) {
+function StateSection({ data }: { data: FuelPage }) {
   const stat = (fuel: FuelType) => data.stats.find((s) => s.fuel === fuel);
   const u91 = stat("U91"), dl = stat("DL");
   const shown = SHOWN.filter((f) => stat(f));
@@ -43,7 +43,7 @@ function StateSection({ data }: { data: FuelSummary }) {
               const s = stat(f)!;
               return (
                 <tr key={f}>
-                  <td>{s.label}<div className="desc">{data.prices.find((p) => p.fuel === f)?.fuelRaw}</div></td>
+                  <td>{s.label}<div className="desc">{s.raw}</div></td>
                   <td className="num">{num(s.count)}</td>
                   <td className="num">{cents(s.cheapest)}</td>
                   <td className="num">{cents(s.median)}</td>
