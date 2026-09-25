@@ -31,6 +31,8 @@ const feedOf = (code: FuelCode): FuelFeed => FUEL_FEEDS.find((f) => (FEEDS[f].st
 // What the owner has to register for each scheme to go live, or null when it already is. Queensland
 // works from the monthly file without one, so its message is advice rather than a failure.
 export const keyNeeded = (code: FuelCode) => FEEDS[feedOf(code)].key();
+// The same by feed, for the snapshot: a feed that can't run without a key is skipped, not failed.
+export const feedKeyNeeded = (feed: FuelFeed) => (feed === "QLD" ? null : FEEDS[feed].key());
 
 // Schemes read through a keyed API. Their free tiers are small (FuelCheck: 2,500 calls a month), so a
 // keyed scheme is read at most three times a day and a failure waits the same eight hours before a retry.

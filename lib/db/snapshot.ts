@@ -10,7 +10,7 @@ import { tryGetBudget } from "../sources/budget";
 import { tryGetTransparency, loadAllEntities } from "../sources/ato-transparency";
 import { tryGetProfits } from "../sources/abs-profits";
 import { tryGetState, STATE_CODES } from "../sources/states";
-import { loadFuelFeed, keyNeeded, FUEL_FEEDS } from "../sources/fuel";
+import { loadFuelFeed, keyNeeded, feedKeyNeeded, FUEL_FEEDS } from "../sources/fuel";
 import { tryGetMigration } from "../sources/migration";
 import { tryGetCrime } from "../sources/crime";
 import { tryGetHomelessness } from "../sources/homelessness";
@@ -210,6 +210,9 @@ export async function runSnapshot(): Promise<RunResult[]> {
   // state-level figures are kept daily as a snapshot and the station rows replace yesterday's.
   for (const feed of FUEL_FEEDS) {
     await step(`fuel:${feed}`, async () => {
+      // No key is a fact about the environment, not a failed fetch: record it as skipped and move on.
+      const missing = feedKeyNeeded(feed);
+      if (missing) return `skipped: ${missing}`;
       const loaded = await loadFuelFeed(feed);
       const parts: string[] = [];
       for (const [code, { prices, ...summary }] of Object.entries(loaded)) {
