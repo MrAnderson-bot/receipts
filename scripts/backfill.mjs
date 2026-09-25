@@ -1,8 +1,10 @@
-// npm run backfill -- contracts:FY2025-26 [--minutes 20]
+// npm run backfill -- <unit> [--minutes 20]
 //
-// Fills one unit of history into data/receipts.db (see docs/backfill.md), resumably: run it again
-// and it carries on from where it stopped. Runs in plain Node, outside Next, through the TypeScript
-// loader in scripts/ts-loader.mjs. Safe to run while the dev server is up; don't run two at once.
+// Units: contracts:FY2025-26, grants:FY2025-26, series:depth, gfs:all, budget:all, companies:all,
+// ipea:all, aps:all (lib/db/backfill.ts lists the single-release forms). Fills one unit of history
+// into data/receipts.db (see docs/backfill.md), resumably: run it again and it carries on from where
+// it stopped. Runs in plain Node, outside Next, through the TypeScript loader in scripts/ts-loader.mjs.
+// Safe to run while the dev server is up; don't run two at once.
 import { register } from "node:module";
 import { pathToFileURL } from "node:url";
 

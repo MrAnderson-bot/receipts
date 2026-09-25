@@ -24,7 +24,7 @@ export type Transparency = {
   noTaxByIncome: Entity[]; // largest by income among those with no tax payable
 };
 
-async function readYear(url: string): Promise<{ year: string; entities: Entity[]; late: Entity[] }> {
+export async function readYear(url: string): Promise<{ year: string; entities: Entity[]; late: Entity[] }> {
   // Not cache: "no-store": that would make the static build refuse to render. The
   // result is cached by unstable_cache below; the spreadsheet itself is too big for
   // Next's fetch cache, which just skips it with a warning.
@@ -67,7 +67,7 @@ export async function loadAllEntities(): Promise<{ year: string; entities: Entit
   return { year: latest.year || files[0].name.slice(0, 7), entities: [...latest.entities, ...latest.late] };
 }
 
-async function listFiles(): Promise<{ name: string; url: string }[]> {
+export async function listFiles(): Promise<{ name: string; url: string }[]> {
   const meta = await fetch(DATASET, { headers: { "User-Agent": USER_AGENT }, next: { revalidate: 86_400 } });
   if (!meta.ok) throw new Error(`data.gov.au returned ${meta.status}`);
   // One spreadsheet per income year; the name starts with the year, so sorting by name puts the newest first.

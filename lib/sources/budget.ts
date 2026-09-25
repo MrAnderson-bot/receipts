@@ -50,22 +50,37 @@ function byYear(rows: string[][], col: number): YearValue[] {
   });
 }
 
-async function load(): Promise<Budget> {
-  const headers = { "User-Agent": USER_AGENT };
-  // Finance creates one dataset per Budget; the newest one whose title starts with "Budget" is current.
+// Finance creates one dataset per Budget on data.gov.au, back to 2014-15. Titles read "Budget 2026-2027 and
+// Portfolio Budget Statements (PBS) - Tables and Data" (older ones "Budget 2023-24", one "Budget 2014 -15").
+export async function listBudgetDatasets(): Promise<{ year: string; title: string; name: string; resources: any[] }[]> {
   const search = await fetch(
-    `${CKAN}/package_search?q=${encodeURIComponent('title:"Portfolio Budget Statements" tables and data')}&rows=10&sort=metadata_created+desc`,
-    { headers, cache: "no-store" });
+    `${CKAN}/package_search?q=${encodeURIComponent('title:"Portfolio Budget Statements" tables and data')}&rows=40&sort=metadata_created+desc`,
+    { headers: { "User-Agent": USER_AGENT }, cache: "no-store" });
   if (!search.ok) throw new Error(`data.gov.au returned ${search.status}`);
   const datasets: any[] = (await search.json()).result?.results ?? [];
-  const dataset = datasets.find((d) => /^Budget \d{4}/i.test(d.title) &&
-    d.resources.some((r: any) => /Budget Paper No\.? ?1 Tables/i.test(r.name ?? "")));
-  if (!dataset) throw new Error("No current Budget tables dataset found on data.gov.au");
-  const resource = (pattern: RegExp) => dataset.resources.find((r: any) => pattern.test(r.name ?? ""))?.url as string | undefined;
-  const budgetYear = dataset.title.match(/(\d{4})-(\d{2,4})/)?.slice(1).map((p: string, i: number) => (i ? p.slice(-2) : p)).join("-") ?? "";
+  const out = datasets.flatMap((d) => {
+    const m = String(d.title ?? "").match(/^Budget\s+(\d{4})\s*-\s*(\d{2,4})/i);
+    if (!m || !d.resources?.length) return [];
+    return [{ year: `${m[1]}-${m[2].slice(-2)}`, title: d.title as string, name: d.name as string, resources: d.resources as any[] }];
+  });
+  // The same Budget can be listed twice; keep the first (newest) copy of each year, newest year first.
+  return [...new Map(out.map((d) => [d.year, d])).values()].sort((a, b) => b.year.localeCompare(a.year));
+}
 
-  // Budget Paper 1 tables: a zip of CSVs. Table numbers move between Budgets, so match on each table's title line.
-  const zipRes = await fetch(resource(/Budget Paper No\.? ?1 Tables/i)!, { headers, cache: "no-store" });
+// The current Budget by default, or the Budget for `year` (e.g. "2019-20") for the backfill.
+export async function loadBudget(year?: string): Promise<Budget> {
+  const headers = { "User-Agent": USER_AGENT };
+  const datasets = await listBudgetDatasets();
+  const dataset = year ? datasets.find((d) => d.year === year) : datasets[0];
+  if (!dataset) throw new Error(year ? `No Budget ${year} tables dataset found on data.gov.au` : "No current Budget tables dataset found on data.gov.au");
+  const resource = (pattern: RegExp) => dataset.resources.find((r: any) => pattern.test(r.name ?? ""))?.url as string | undefined;
+  const budgetYear = dataset.year;
+  if (!resource(/Budget Paper No\.? ?1\b/i)) throw new Error(`Budget ${budgetYear} has no Budget Paper No. 1 tables zip on data.gov.au`);
+
+  // Budget Paper 1 tables: a zip of CSVs, named "Budget Paper No.1 Tables" or "... Budget Strategy and Outlook Tables"
+  // depending on the year (2014-15 and 2015-16 published loose CSVs instead, which this cannot read). Table numbers
+  // move between Budgets, so match on each table's title line.
+  const zipRes = await fetch(resource(/Budget Paper No\.? ?1\b/i)!, { headers, cache: "no-store" });
   if (!zipRes.ok) throw new Error(`data.gov.au returned ${zipRes.status} for the Budget Paper 1 tables`);
   const tables = [...unzip(Buffer.from(await zipRes.arrayBuffer())).entries()]
     .filter(([name]) => /\.csv$/i.test(name))
@@ -95,8 +110,10 @@ async function load(): Promise<Budget> {
   const cash = table(/receipts, payments.*underlying cash balance/i);
   // Columns: year, net debt $m, % GDP, net interest $m, % GDP
   const debt = table(/net debt and net interest payments/i);
-  // Columns: year, revenue $m, % GDP, expenses $m, % GDP, net operating balance $m, % GDP, net capital investment $m, % GDP, fiscal balance $m, % GDP
-  const accrual = table(/net capital investment and fiscal balance/i);
+  // Columns: year, revenue $m, % GDP, expenses $m, % GDP, net operating balance $m, % GDP, net capital investment $m, % GDP, fiscal balance $m, % GDP.
+  // Older Budgets' zips may not carry this table; then those columns are simply empty.
+  let accrual: string[][] = [];
+  try { accrual = table(/net capital investment and fiscal balance/i); } catch { accrual = []; }
   const receipts = byYear(cash, 1);
 
   // Program expenses, in $'000. "Revenue from Government" rows repeat money already counted as an expense.
@@ -137,8 +154,74 @@ async function load(): Promise<Budget> {
   };
 }
 
+// Every program expense line in a Budget's Portfolio Budget Statements, as Finance publishes them with each
+// Budget since 2014-15 ("PBS Program Expense Line Items", CSV or xlsx; "PBS Line Items Dataset" in the first
+// two years). One row per program, expense type and description, with a column per year the Budget covered,
+// in $'000. This is what past Budgets reliably offer (their zips carry no expenses-by-function table), so it
+// is what the backfill stores for each Budget (docs/backfill.md).
+export type ProgramLine = {
+  portfolio: string; agency: string; outcome: string; program: string; expenseType: string; appropriation: string; description: string;
+  values: Record<string, number>; // financial year -> dollars
+};
+export type BudgetPrograms = {
+  budgetYear: string; datasetUrl: string; fileUrl: string;
+  years: string[]; // the year columns, oldest first
+  lines: ProgramLine[];
+  byPortfolio: { name: string; values: Record<string, number> }[]; // expense lines only, largest in the budget year first
+};
+
+export async function loadBudgetPrograms(year: string): Promise<BudgetPrograms> {
+  const headers = { "User-Agent": USER_AGENT };
+  const dataset = (await listBudgetDatasets()).find((d) => d.year === year);
+  if (!dataset) throw new Error(`No Budget ${year} dataset found on data.gov.au`);
+  const file = dataset.resources.find((r: any) => /Program Expenses? Line Items|PBS Line Items Dataset/i.test(r.name ?? ""));
+  if (!file) throw new Error(`Budget ${year} has no program expense line items file`);
+  const res = await fetch(file.url as string, { headers, cache: "no-store" });
+  if (!res.ok) throw new Error(`data.gov.au returned ${res.status} for the ${year} program expense file`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  // CSV most years, xlsx in 2026-27; either way a grid of cells with the header somewhere near the top.
+  let grid: string[][];
+  if (/\.xlsx$/i.test(String(file.url)) || buf.subarray(0, 2).toString() === "PK") {
+    const book = readWorkbook(buf);
+    const rows = book.sheet(book.sheetNames[0]);
+    const letters = [...new Set(rows.flatMap((r) => Object.keys(r)))].sort((a, b) => a.length - b.length || a.localeCompare(b));
+    grid = rows.map((r) => letters.map((l) => String(r[l] ?? "")));
+  } else {
+    grid = parseCsv(buf.toString("utf8").replace(/^﻿/, ""));
+  }
+  const headAt = grid.findIndex((r) => r.some((c) => /^portfolio$/i.test(c.trim())) && r.some((c) => /^program$/i.test(c.trim())));
+  if (headAt < 0) throw new Error(`The ${year} program expense file has no Portfolio/Program header row; the layout may have changed`);
+  const head = grid[headAt].map((c) => c.trim());
+  const find = (re: RegExp) => head.findIndex((h) => re.test(h));
+  const col = {
+    portfolio: find(/^portfolio$/i), agency: find(/^(department\/agency|agency name|agency|entity)$/i), outcome: find(/^outcome$/i),
+    program: find(/^program$/i), expenseType: find(/^expense[ _]?type$/i), appropriation: find(/^appropriation[ _]?type$/i), description: find(/^description$/i),
+  };
+  const yearCols = head.map((h, i) => [h.match(/^(\d{4}-\d{2})/)?.[1] ?? "", i] as const).filter(([y]) => y);
+  const years = yearCols.map(([y]) => y);
+  if (col.program < 0 || years.length === 0) throw new Error(`The ${year} program expense file has no program or year columns`);
+  const cell = (r: string[], i: number) => (i >= 0 ? (r[i] ?? "").trim() : "");
+  const lines: ProgramLine[] = grid.slice(headAt + 1).filter((r) => cell(r, col.program)).map((r) => ({
+    portfolio: cell(r, col.portfolio) || "Unknown", agency: cell(r, col.agency), outcome: cell(r, col.outcome), program: cell(r, col.program),
+    expenseType: cell(r, col.expenseType), appropriation: cell(r, col.appropriation), description: cell(r, col.description),
+    values: Object.fromEntries(yearCols.map(([y, i]) => [y, (Number(cell(r, i).replace(/,/g, "")) || 0) * 1000])),
+  }));
+  // Expense lines only: "Program Component" and "Revenue from Government" rows repeat money already counted.
+  const portfolios = new Map<string, Record<string, number>>();
+  for (const l of lines) {
+    if (!/expenses/i.test(l.expenseType)) continue;
+    const v = portfolios.get(l.portfolio) ?? Object.fromEntries(years.map((y) => [y, 0]));
+    for (const y of years) v[y] += l.values[y] ?? 0;
+    portfolios.set(l.portfolio, v);
+  }
+  return {
+    budgetYear: year, datasetUrl: `https://data.gov.au/data/dataset/${dataset.name}`, fileUrl: file.url, years, lines,
+    byPortfolio: [...portfolios.entries()].map(([name, values]) => ({ name, values })).sort((a, b) => (b.values[year] ?? 0) - (a.values[year] ?? 0)),
+  };
+}
+
 // New tables arrive with each Budget, so a daily check is plenty.
-const cached = unstable_cache(load, ["budget-tables"], { revalidate: 86_400 });
+const cached = unstable_cache(() => loadBudget(), ["budget-tables"], { revalidate: 86_400 });
 
 export async function tryGetBudget(): Promise<{ data: Budget | null; error: string | null }> {
   try {

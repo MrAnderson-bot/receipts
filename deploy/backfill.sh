@@ -21,12 +21,19 @@ PAUSE="${BACKFILL_PAUSE:-20}"
 
 log() { echo "[$(date -u +%FT%TZ)] $*"; }
 
-# Newest financial year first. AusTender's record starts in July 2007.
+# In the plan's priority order (docs/backfill.md): the cheap whole-history units first, then contracts
+# newest financial year first (AusTender's record starts in July 2007), then grants (GrantConnect began
+# in December 2017), then the quarterly and half-yearly releases.
 default_units() {
   local y
+  printf 'series:depth gfs:all budget:all companies:all '
   for y in $(seq 2025 -1 2007); do
     printf 'contracts:FY%d-%02d ' "$y" "$(( (y + 1) % 100 ))"
   done
+  for y in $(seq 2025 -1 2017); do
+    printf 'grants:FY%d-%02d ' "$y" "$(( (y + 1) % 100 ))"
+  done
+  printf 'ipea:all aps:all'
 }
 UNITS="${BACKFILL_UNITS:-$(default_units)}"
 

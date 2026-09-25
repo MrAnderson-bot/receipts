@@ -7,6 +7,7 @@ import type { FuelPrice } from "../sources/fuel/types";
 import type { ApsRow } from "../sources/apsc";
 import type { ExpenseRow } from "../sources/ipea";
 import type { StateGrantRow } from "../sources/state-grants/types";
+import type { GrantRow } from "../sources/grantconnect";
 
 export type BackfillProgress = {
   unit: string; status: "pending" | "running" | "done" | "failed"; cursor: string | null;
@@ -43,6 +44,7 @@ export type DbStats = {
   apsReleases: number;
   expenses: number; // parliamentarians' expense lines from IPEA
   stateGrants: number; // state grant payment lines, every published column
+  grants: number; // Commonwealth grant awards from GrantConnect, every report column
   contractReleases: number; // every AusTender release (original notices and amendments), every API field
   lastRun: { startedAt: string; finishedAt: string | null; ok: boolean; saved: number; failed: number } | null;
 };
@@ -78,6 +80,8 @@ export interface Store {
   saveApsHeadcount(rows: ApsRow[]): Promise<{ added: number }>;
   // Every parliamentarian expense line IPEA publishes, one row each, every column as published.
   saveExpenses(rows: ExpenseRow[]): Promise<{ added: number }>;
+  // Commonwealth grant awards, one row per GA id, every column of the GrantConnect report as JSON plus the fields worth querying.
+  saveGrants(rows: GrantRow[]): Promise<{ added: number }>;
   // State grant payments, one row per line of the published list: the shared fields as columns and every
   // published column as JSON. `replace` says what the load is the whole of, so stored rows it no longer
   // carries are removed: the years it covers (a file republished whole), the programs it re-read (a register

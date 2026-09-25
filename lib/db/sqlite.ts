@@ -8,6 +8,7 @@ import type { FuelPrice } from "../sources/fuel/types";
 import type { ApsRow } from "../sources/apsc";
 import type { BackfillProgress, CompanyRow, Contradiction, DbStats, Revision, RunResult, Store } from "./types";
 import { EXPENSE_COLUMNS, type ExpenseRow } from "../sources/ipea";
+import type { GrantRow } from "../sources/grantconnect";
 import type { StateGrantRow } from "../sources/state-grants/types";
 
 // UniqueId -> unique_id, ReportingPeriodId -> reporting_period_id, and so on.
@@ -112,6 +113,14 @@ CREATE INDEX IF NOT EXISTS contract_releases_by_cn ON contract_releases (cn_id, 
 CREATE INDEX IF NOT EXISTS contract_releases_by_date ON contract_releases (release_date);
 CREATE INDEX IF NOT EXISTS contract_releases_by_agency ON contract_releases (agency_abn, release_date);
 CREATE INDEX IF NOT EXISTS contract_releases_by_supplier ON contract_releases (supplier_abn, release_date);
+CREATE TABLE IF NOT EXISTS grants (
+  id TEXT PRIMARY KEY, agency TEXT NOT NULL, recipient TEXT NOT NULL, recipient_abn TEXT, program TEXT, category TEXT,
+  selection TEXT, value REAL NOT NULL, published TEXT, start TEXT, end TEXT, delivery_state TEXT,
+  fields TEXT NOT NULL, source_url TEXT NOT NULL, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS grants_by_published ON grants (published);
+CREATE INDEX IF NOT EXISTS grants_by_recipient_abn ON grants (recipient_abn);
+CREATE INDEX IF NOT EXISTS grants_by_agency ON grants (agency, published);
 CREATE TABLE IF NOT EXISTS backfill_progress (
   unit TEXT PRIMARY KEY, status TEXT NOT NULL, cursor TEXT, rows_added INTEGER NOT NULL DEFAULT 0,
   calls INTEGER NOT NULL DEFAULT 0, started TEXT, finished TEXT, error TEXT
@@ -226,6 +235,29 @@ export const sqliteStore: Store = {
       d.exec("COMMIT");
     } catch (e) { d.exec("ROLLBACK"); throw e; }
     return rows.length;
+  },
+
+  async saveGrants(rows: GrantRow[]) {
+    const d = open();
+    const at = now();
+    const cols = ["id", "agency", "recipient", "recipient_abn", "program", "category", "selection", "value", "published", "start", "end",
+      "delivery_state", "fields", "source_url", "first_seen", "last_seen"];
+    const updates = cols.filter((c) => c !== "id" && c !== "first_seen").map((c) => `${c} = excluded.${c}`);
+    const insert = d.prepare(`INSERT INTO grants (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(",")})
+      ON CONFLICT(id) DO UPDATE SET ${updates.join(", ")}`);
+    const before = Number(d.prepare("SELECT COUNT(*) AS n FROM grants").get().n);
+    d.exec("BEGIN");
+    try {
+      for (const r of rows) {
+        const f = r.fields;
+        const abn = f["Recipient ABN"].replace(/\s+/g, "");
+        insert.run(r.id, f.Agency || "Unknown agency", f["Recipient Name"] || "Not published", /^\d+$/.test(abn) ? abn : null,
+          f["Grant Program"], f.Category, f["Selection Process"], r.value, r.published, r.start, r.end, f["Delivery State/Territory"],
+          JSON.stringify(f), r.sourceUrl, at, at);
+      }
+      d.exec("COMMIT");
+    } catch (e) { d.exec("ROLLBACK"); throw e; }
+    return { added: Number(d.prepare("SELECT COUNT(*) AS n FROM grants").get().n) - before };
   },
 
   async saveExpenses(rows: ExpenseRow[]) {
@@ -452,6 +484,7 @@ export const sqliteStore: Store = {
       apsRows: count("aps_headcount"), apsReleases: Number(d.prepare("SELECT COUNT(DISTINCT release) AS n FROM aps_headcount").get().n),
       expenses: count("ipea_expenses"),
       stateGrants: count("state_grants"),
+      grants: count("grants"),
       contractReleases: count("contract_releases"),
       lastRun: run ? { startedAt: run.started_at, finishedAt: run.finished_at, ok: !!run.ok, saved: run.saved, failed: run.failed } : null,
     };

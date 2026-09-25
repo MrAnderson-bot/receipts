@@ -89,13 +89,25 @@ function bump<T extends Bucket>(map: Map<string, T>, key: string, make: () => T,
 const top = <T extends Bucket>(map: Map<string, T>, n: number) =>
   [...map.values()].sort((a, b) => b.value - a.value).slice(0, n);
 
-async function load(days: number): Promise<GrantSummary> {
-  const to = new Date();
-  const from = new Date(to.getTime() - days * DAY);
+// Every column the published-grants report gives, as the report names them. Stored one-to-one in the
+// `grants` table (docs/backfill.md); a new column in the report is added here and in lib/db/sqlite.ts.
+export const GRANT_COLUMNS = [
+  "Agency", "GA ID", "Internal Reference ID", "GO ID", "Recipient Name", "Recipient ABN", "PBS Program Name",
+  "Grant Program", "Grant Activity", "Purpose", "One-off/Ad hoc", "Aggregate", "Aggregate Reason", "Aggregate Number",
+  "Selection Process", "Category", "Confidentiality - Contract", "Confidentiality - Outputs", "Publish Date",
+  "Approval Date", "Start Date", "End Date", "Value (AUD)", "Recipient Suburb", "Recipient Town/City",
+  "Recipient Postcode", "Recipient State/Territory", "Recipient Country", "Delivery State/Territory",
+  "Delivery Postcode", "Delivery Country",
+] as const;
+export type GrantColumn = (typeof GRANT_COLUMNS)[number];
+// One report row, every column as the report gives it, plus the parsed value and dates for querying.
+export type GrantRow = { fields: Record<GrantColumn, string>; id: string; value: number; published: string | null; start: string | null; end: string | null; sourceUrl: string };
+
+// The published-grants report for a publish-date window: the raw sheet rows and the column letters.
+async function fetchReport(from: Date, to: Date) {
   const query = new URLSearchParams({
     AgencyStatus: "0", DateType: "Publish Date", DateStart: reportDate(from), DateEnd: reportDate(to),
   }).toString().replace(/\+/g, "%20");
-
   const res = await fetch(`https://www.grants.gov.au/Reports/GaPublishedDownload?${query}`, {
     headers: { "User-Agent": USER_AGENT, Accept: "*/*" },
     cache: "no-store", // the spreadsheet is too big for the fetch cache; the summary below is cached instead
@@ -103,14 +115,39 @@ async function load(days: number): Promise<GrantSummary> {
   if (!res.ok) throw new Error(`GrantConnect returned ${res.status}`);
   const book = readWorkbook(Buffer.from(await res.arrayBuffer()));
   const rows = book.sheet(book.sheetNames[0]);
-
   // The sheet opens with a block describing the search; the table starts at the row holding "GA ID".
   const headAt = rows.findIndex((r) => Object.values(r).includes("GA ID"));
   if (headAt < 0) throw new Error("GrantConnect report has no GA ID column; the layout may have changed");
   const col = Object.fromEntries(Object.entries(rows[headAt]).map(([letter, name]) => [name.trim(), letter]));
+  return { rows: rows.slice(headAt + 1), col, query };
+}
+
+// Every award published in the window, every column, for the grants table. Plain Node only (the
+// backfill runner); the report is fetched uncached, which the static build refuses.
+export async function loadGrantRows(from: Date, to: Date): Promise<GrantRow[]> {
+  const { rows, col, query } = await fetchReport(from, to);
+  const sourceUrl = `https://www.grants.gov.au/Reports/GaPublishedShow?${query}`;
+  const seen = new Map<string, GrantRow>();
+  for (const r of rows) {
+    const get = (name: string) => (r[col[name]] ?? "").trim();
+    const id = get("GA ID");
+    if (!id || seen.has(id)) continue;
+    const fields = Object.fromEntries(GRANT_COLUMNS.map((c) => [c, get(c)])) as Record<GrantColumn, string>;
+    seen.set(id, {
+      fields, id, value: Number(get("Value (AUD)")) || 0,
+      published: excelDate(get("Publish Date")), start: excelDate(get("Start Date")), end: excelDate(get("End Date")), sourceUrl,
+    });
+  }
+  return [...seen.values()];
+}
+
+async function load(days: number): Promise<GrantSummary> {
+  const to = new Date();
+  const from = new Date(to.getTime() - days * DAY);
+  const { rows, col, query } = await fetchReport(from, to);
 
   const seen = new Map<string, Grant>();
-  for (const r of rows.slice(headAt + 1)) {
+  for (const r of rows) {
     const g = toGrant(r, col);
     if (g.id && !seen.has(g.id)) seen.set(g.id, g);
   }

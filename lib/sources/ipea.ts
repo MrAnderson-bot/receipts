@@ -87,7 +87,7 @@ export const reportUrl = (surname: string, firstName: string, role: string, star
   `https://www.ipea.gov.au/pwe/full-report/${[surname, firstName, role, start].map((s) => encodeURIComponent(s)).join("/")}`;
 
 // Every quarterly extract IPEA has put on data.gov.au, newest first.
-async function listQuarters(): Promise<Quarter[]> {
+export async function listQuarters(): Promise<Quarter[]> {
   const res = await fetch(CKAN, { headers: { "User-Agent": USER_AGENT }, next: { revalidate: 21_600 } });
   if (!res.ok) throw new Error(`data.gov.au returned ${res.status} listing IPEA datasets`);
   const json: any = await res.json();
@@ -129,7 +129,7 @@ function rawGet(url: string, hops = 0): Promise<{ status: number; body: string }
   });
 }
 
-async function readQuarter(q: Quarter): Promise<{ quarter: Quarter; rows: ExpenseRow[] }> {
+export async function readQuarter(q: Quarter): Promise<{ quarter: Quarter; rows: ExpenseRow[] }> {
   const { status, body } = await rawGet(q.url);
   if (status !== 200) throw new Error(`data.gov.au returned ${status} for ${q.id}`);
   const table = parseCsv(body);

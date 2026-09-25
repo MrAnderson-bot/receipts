@@ -67,9 +67,9 @@ export function band(level: string): string {
 
 // --- finding the releases on data.gov.au ---------------------------------------
 
-type Found = { date: string; label: string; title: string; url: string; datasetUrl: string };
+export type Found = { date: string; label: string; title: string; url: string; datasetUrl: string };
 
-async function findReleases(): Promise<Found[]> {
+export async function findReleases(): Promise<Found[]> {
   const q = encodeURIComponent('title:"APS Employment Data"');
   // Not cache: "no-store": the static build refuses to render a route that uses it outside unstable_cache.
   const res = await fetch(`${CKAN}/package_search?q=${q}&sort=metadata_modified+desc&rows=40`, { headers, next: { revalidate: DAY } });
@@ -243,3 +243,10 @@ export async function tryGetAps(): Promise<{ data: ApsSummary | null; error: str
 
 // Uncached, with every row: for the snapshot only.
 export const loadAps = load;
+
+// One release's agency-by-gender-by-classification rows, for the backfill (docs/backfill.md).
+export async function loadRelease(f: Found): Promise<{ rows: ApsRow[]; release: ApsRelease }> {
+  const book = await download(f);
+  const rows = readTable10(findTable(book, /agency by gender and classification level/i), f);
+  return { rows, release: summarise(rows, f) };
+}
