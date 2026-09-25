@@ -12,3 +12,6 @@ tsconfig.tsbuildinfo
 # owner-only notes (stream, fundraiser, image tools); not part of the open-source project
 docs/HANDOVER-launch.md
 docs/launch-tools/
+
+# Agent worktrees (temporary checkouts used for parallel work)
+.claude/worktrees/
