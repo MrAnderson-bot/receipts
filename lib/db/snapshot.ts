@@ -10,7 +10,7 @@ import { tryGetBudget } from "../sources/budget";
 import { tryGetTransparency, loadAllEntities } from "../sources/ato-transparency";
 import { tryGetProfits } from "../sources/abs-profits";
 import { tryGetState, STATE_CODES } from "../sources/states";
-import { tryGetFuel, FUEL_CODES } from "../sources/fuel";
+import { loadFuelFeed, keyNeeded, FUEL_FEEDS } from "../sources/fuel";
 import { tryGetMigration } from "../sources/migration";
 import { tryGetCrime } from "../sources/crime";
 import { tryGetHomelessness } from "../sources/homelessness";
@@ -201,13 +201,19 @@ export async function runSnapshot(): Promise<RunResult[]> {
     });
   }
 
-  // Fuel: the state-level figures are kept daily as a snapshot; the station rows replace yesterday's.
-  for (const code of FUEL_CODES) {
-    await step(`fuel:${code}`, async () => {
-      const { prices, ...summary } = need(await tryGetFuel(code));
-      await store.saveSnapshot("fuel", code, summary);
-      const saved = await store.saveFuelPrices(code, prices);
-      return `${summary.stationCount} stations, ${saved} prices for ${summary.date}`;
+  // Fuel: one uncached load per feed (the station rows are too big for the page cache), then the
+  // state-level figures are kept daily as a snapshot and the station rows replace yesterday's.
+  for (const feed of FUEL_FEEDS) {
+    await step(`fuel:${feed}`, async () => {
+      const loaded = await loadFuelFeed(feed);
+      const parts: string[] = [];
+      for (const [code, { prices, ...summary }] of Object.entries(loaded)) {
+        await store.saveSnapshot("fuel", code, summary);
+        const saved = await store.saveFuelPrices(code, prices);
+        parts.push(`${code} ${summary.stationCount} stations, ${saved} prices for ${summary.date}`);
+      }
+      const key = keyNeeded(loaded[Object.keys(loaded)[0] as keyof typeof loaded]!.code);
+      return parts.join("; ") + (key ? ` (${key})` : "");
     });
   }
 
