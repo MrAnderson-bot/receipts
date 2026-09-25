@@ -88,7 +88,7 @@ async function fetchWindow(from: Date, to: Date): Promise<any[]> {
   return releases;
 }
 
-function toContracts(rel: any): (Contract & { amendment: boolean })[] {
+export function toContracts(rel: any): (Contract & { amendment: boolean })[] {
   const parties: any[] = rel.parties ?? [];
   const agency =
     parties.find((p) => p.roles?.includes("procuringEntity"))?.name ??
@@ -440,4 +440,98 @@ export async function getSummary(days: number): Promise<Summary> {
     limitedReasons: rank(reasons, (r) => r.value, 8),
     biggest: [...contracts].sort((a, b) => b.value - a.value).slice(0, 12),
   };
+}
+
+// --- every release, every field ------------------------------------------------
+// The API publishes one release per event: the original notice (tag "contract") and each amendment
+// (tag "contractAmendment", same CN id, a new award id and page). `contractPublished` only returns
+// originals; `contractLastModified` returns every release changed in the window, so it is the one
+// to walk for a complete record. A Release is one contract in one release, flattened, with the
+// whole release kept as JSON. Agency contact names, emails and phones are stripped before storing.
+
+export type ReleaseKind = "contractPublished" | "contractLastModified";
+
+export type Release = {
+  releaseId: string; cnId: string; ocid: string; releaseDate: string; tag: string; // tags joined with ","
+  initiationType: string | null; language: string | null;
+  awardId: string | null; pageId: string | null; awardDate: string | null; awardStatus: string | null;
+  agencyPartyId: string | null; agency: string; agencyAbn: string | null; agencyBranch: string | null; agencyDivision: string | null;
+  supplierPartyId: string | null; supplier: string; supplierAbn: string | null;
+  supplierStreet: string | null; supplierLocality: string | null; supplierRegion: string | null; supplierPostcode: string | null; supplierCountry: string | null;
+  title: string | null; // the agency's own reference (purchase order or file number)
+  description: string; contractStatus: string | null; dateSigned: string | null; // on an amendment, the original's publish date
+  value: number; currency: string | null; periodStart: string | null; periodEnd: string | null;
+  unspsc: string | null; unspscScheme: string | null; items: { id: string | null; unspsc: string | null; scheme: string | null }[];
+  tenderId: string | null; procurementMethod: string | null; procurementMethodDetails: string | null;
+  limitedTenderExempt: string | null; exemptionCode: string | null; exemption: string | null;
+  limitedReasonCode: string | null; limitedReason: string | null;
+  release: any; // the whole release as published, minus personal contact details
+};
+
+const str = (v: unknown): string | null => (v === undefined || v === null || v === "" ? null : String(v));
+
+function stripContacts(rel: any): any {
+  const copy = JSON.parse(JSON.stringify(rel));
+  for (const p of copy.parties ?? []) {
+    if (p.contactPoint) { delete p.contactPoint.name; delete p.contactPoint.email; delete p.contactPoint.telephone; }
+  }
+  return copy;
+}
+
+export function toReleases(rel: any): Release[] {
+  const parties: any[] = rel.parties ?? [];
+  const agencyParty = parties.find((p) => p.roles?.includes("procuringEntity"));
+  const sup = parties.find((p) => p.roles?.includes("supplier"));
+  const abnOf = (p: any) => str(p?.additionalIdentifiers?.find((i: any) => /abn/i.test(i.scheme ?? ""))?.id);
+  // The API files the agency's branch and division under the supplier's contact point.
+  const branch = str(sup?.contactPoint?.branch) ?? str(agencyParty?.contactPoint?.branch);
+  const division = str(sup?.contactPoint?.division) ?? str(agencyParty?.contactPoint?.division);
+  const stored = stripContacts(rel);
+  return (rel.contracts ?? []).map((c: any) => {
+    const award = (rel.awards ?? []).find((a: any) => a.id === c.awardID) ?? rel.awards?.[0];
+    const items = (c.items ?? []).map((i: any) => ({ id: str(i.id), unspsc: str(i.classification?.id), scheme: str(i.classification?.scheme) }));
+    const t = rel.tender ?? {};
+    return {
+      releaseId: String(rel.id), cnId: String(c.id ?? rel.ocid), ocid: String(rel.ocid ?? ""), releaseDate: String(rel.date ?? c.dateSigned ?? ""),
+      tag: (rel.tag ?? []).join(","), initiationType: str(rel.initiationType), language: str(rel.language),
+      awardId: str(award?.id), pageId: noticePageId(str(award?.id)), awardDate: str(award?.date), awardStatus: str(award?.status),
+      agencyPartyId: str(agencyParty?.id), agency: agencyParty?.name ?? rel.buyer?.name ?? "Unknown agency", agencyAbn: abnOf(agencyParty),
+      agencyBranch: branch, agencyDivision: division,
+      supplierPartyId: str(sup?.id), supplier: sup?.name ?? "Unknown supplier", supplierAbn: abnOf(sup),
+      supplierStreet: str(sup?.address?.streetAddress), supplierLocality: str(sup?.address?.locality), supplierRegion: str(sup?.address?.region),
+      supplierPostcode: str(sup?.address?.postalCode), supplierCountry: str(sup?.address?.countryName),
+      title: str(c.title), description: c.description ?? t.description ?? "", contractStatus: str(c.status), dateSigned: str(c.dateSigned),
+      value: Number(c.value?.amount ?? 0) || 0, currency: str(c.value?.currency), periodStart: str(c.period?.startDate), periodEnd: str(c.period?.endDate),
+      unspsc: items[0]?.unspsc ?? null, unspscScheme: items[0]?.scheme ?? null, items,
+      tenderId: str(t.id), procurementMethod: str(t.procurementMethod)?.toLowerCase() ?? null, procurementMethodDetails: str(t.procurementMethodDetails),
+      limitedTenderExempt: str(t.limitedTenderExempt), exemptionCode: str(t.exemptionCode), exemption: str(t.exemption),
+      limitedReasonCode: str(t.limitedTenderReasonCode), limitedReason: str(t.limitedTenderReason),
+      release: stored,
+    };
+  });
+}
+
+// Reads every page of one window from one endpoint, politely: one page at a time with a pause between,
+// and an error (never silence) if the window has more pages than allowed. Plain fetch with no Next
+// caching, so it works in a script as well as in a build.
+export async function fetchReleases(
+  kind: ReleaseKind, from: Date, to: Date,
+  opts: { pauseMs?: number; maxPages?: number; onPage?: (n: number, releases: number) => void } = {},
+): Promise<{ releases: any[]; pages: number }> {
+  const { pauseMs = 300, maxPages = 500 } = opts;
+  let url: string | null = `${BASE}/findByDates/${kind}/${iso(from)}/${iso(to)}`;
+  const releases: any[] = [];
+  let pages = 0;
+  while (url) {
+    if (pages >= maxPages) throw new Error(`AusTender window ${iso(from)} to ${iso(to)} has more than ${maxPages} pages; use a smaller window`);
+    const res: Response = await fetch(url, { cache: "no-store", headers: { "User-Agent": USER_AGENT } });
+    if (!res.ok) throw new Error(`AusTender returned ${res.status} for ${url}`);
+    const json: any = await res.json();
+    releases.push(...(json.releases ?? []));
+    pages++;
+    opts.onPage?.(pages, releases.length);
+    url = json.links?.next ?? null;
+    if (url && pauseMs) await new Promise((r) => setTimeout(r, pauseMs));
+  }
+  return { releases, pages };
 }

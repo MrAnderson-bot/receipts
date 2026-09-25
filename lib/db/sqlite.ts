@@ -3,10 +3,10 @@
 import { mkdirSync } from "fs";
 import path from "path";
 import type { Series } from "../sources/types";
-import { noticePageId, type Contract, type Notice } from "../sources/austender";
+import { noticePageId, type Contract, type Notice, type Release } from "../sources/austender";
 import type { FuelPrice } from "../sources/fuel/types";
 import type { ApsRow } from "../sources/apsc";
-import type { CompanyRow, Contradiction, DbStats, Revision, RunResult, Store } from "./types";
+import type { BackfillProgress, CompanyRow, Contradiction, DbStats, Revision, RunResult, Store } from "./types";
 import { EXPENSE_COLUMNS, type ExpenseRow } from "../sources/ipea";
 
 // UniqueId -> unique_id, ReportingPeriodId -> reporting_period_id, and so on.
@@ -74,6 +74,32 @@ CREATE TABLE IF NOT EXISTS ipea_expenses (
   amount_aud REAL NOT NULL, source_url TEXT NOT NULL, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ipea_expenses_by_period ON ipea_expenses (reporting_period_id, surname, first_name);
+-- Every release the AusTender API publishes, one row per contract per release: the original notice (tag
+-- "contract") and each amendment (tag "contractAmendment", same cn_id, its own award and page). Every API
+-- field has a column and the whole release is kept as JSON, minus agency contact names, emails and phones.
+CREATE TABLE IF NOT EXISTS contract_releases (
+  release_id TEXT NOT NULL, cn_id TEXT NOT NULL, ocid TEXT NOT NULL, release_date TEXT NOT NULL, tag TEXT NOT NULL,
+  initiation_type TEXT, language TEXT,
+  award_id TEXT, page_id TEXT, award_date TEXT, award_status TEXT,
+  agency_party_id TEXT, agency TEXT NOT NULL, agency_abn TEXT, agency_branch TEXT, agency_division TEXT,
+  supplier_party_id TEXT, supplier TEXT NOT NULL, supplier_abn TEXT,
+  supplier_street TEXT, supplier_locality TEXT, supplier_region TEXT, supplier_postcode TEXT, supplier_country TEXT,
+  title TEXT, description TEXT NOT NULL, contract_status TEXT, date_signed TEXT,
+  value REAL NOT NULL, currency TEXT, period_start TEXT, period_end TEXT,
+  unspsc TEXT, unspsc_scheme TEXT, items TEXT NOT NULL,
+  tender_id TEXT, procurement_method TEXT, procurement_method_details TEXT,
+  limited_tender_exempt TEXT, exemption_code TEXT, exemption TEXT, limited_reason_code TEXT, limited_reason TEXT,
+  release TEXT NOT NULL, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL,
+  PRIMARY KEY (release_id, cn_id)
+);
+CREATE INDEX IF NOT EXISTS contract_releases_by_cn ON contract_releases (cn_id, release_date);
+CREATE INDEX IF NOT EXISTS contract_releases_by_date ON contract_releases (release_date);
+CREATE INDEX IF NOT EXISTS contract_releases_by_agency ON contract_releases (agency_abn, release_date);
+CREATE INDEX IF NOT EXISTS contract_releases_by_supplier ON contract_releases (supplier_abn, release_date);
+CREATE TABLE IF NOT EXISTS backfill_progress (
+  unit TEXT PRIMARY KEY, status TEXT NOT NULL, cursor TEXT, rows_added INTEGER NOT NULL DEFAULT 0,
+  calls INTEGER NOT NULL DEFAULT 0, started TEXT, finished TEXT, error TEXT
+);
 CREATE TABLE IF NOT EXISTS runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, finished_at TEXT,
   ok INTEGER NOT NULL DEFAULT 0, saved INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0, detail TEXT
@@ -87,7 +113,8 @@ function open(): Database {
   if (!sqlite) throw new Error("This Node version has no built-in SQLite. Use Node 22.5 or later.");
   mkdirSync(path.dirname(FILE), { recursive: true });
   const opened: Database = new sqlite.DatabaseSync(FILE);
-  opened.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+  // busy_timeout: the dev server, the nightly build and a backfill script may share the file; wait, don't fail.
+  opened.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 10000;");
   opened.exec(SCHEMA);
   // CREATE TABLE IF NOT EXISTS leaves an existing table alone, so add any column the schema has gained since.
   const wanted = SCHEMA.match(/CREATE TABLE IF NOT EXISTS contracts \(([\s\S]*?)\n\);/)?.[1] ?? "";
@@ -197,6 +224,50 @@ export const sqliteStore: Store = {
     return { added };
   },
 
+  async saveReleases(rows: Release[]) {
+    const d = open();
+    const at = now();
+    const cols = ["release_id", "cn_id", "ocid", "release_date", "tag", "initiation_type", "language",
+      "award_id", "page_id", "award_date", "award_status",
+      "agency_party_id", "agency", "agency_abn", "agency_branch", "agency_division",
+      "supplier_party_id", "supplier", "supplier_abn", "supplier_street", "supplier_locality", "supplier_region", "supplier_postcode", "supplier_country",
+      "title", "description", "contract_status", "date_signed", "value", "currency", "period_start", "period_end",
+      "unspsc", "unspsc_scheme", "items", "tender_id", "procurement_method", "procurement_method_details",
+      "limited_tender_exempt", "exemption_code", "exemption", "limited_reason_code", "limited_reason",
+      "release", "first_seen", "last_seen"];
+    const updates = cols.filter((c) => !["release_id", "cn_id", "first_seen"].includes(c)).map((c) => `${c} = excluded.${c}`);
+    const insert = d.prepare(`INSERT INTO contract_releases (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(",")})
+      ON CONFLICT(release_id, cn_id) DO UPDATE SET ${updates.join(", ")}`);
+    const before = Number(d.prepare("SELECT COUNT(*) AS n FROM contract_releases").get().n);
+    d.exec("BEGIN");
+    try {
+      for (const r of rows) {
+        insert.run(r.releaseId, r.cnId, r.ocid, r.releaseDate, r.tag, r.initiationType, r.language,
+          r.awardId, r.pageId, r.awardDate, r.awardStatus,
+          r.agencyPartyId, r.agency, r.agencyAbn, r.agencyBranch, r.agencyDivision,
+          r.supplierPartyId, r.supplier, r.supplierAbn, r.supplierStreet, r.supplierLocality, r.supplierRegion, r.supplierPostcode, r.supplierCountry,
+          r.title, r.description, r.contractStatus, r.dateSigned, r.value, r.currency, r.periodStart, r.periodEnd,
+          r.unspsc, r.unspscScheme, JSON.stringify(r.items), r.tenderId, r.procurementMethod, r.procurementMethodDetails,
+          r.limitedTenderExempt, r.exemptionCode, r.exemption, r.limitedReasonCode, r.limitedReason,
+          JSON.stringify(r.release), at, at);
+      }
+      d.exec("COMMIT");
+    } catch (e) { d.exec("ROLLBACK"); throw e; }
+    return { added: Number(d.prepare("SELECT COUNT(*) AS n FROM contract_releases").get().n) - before };
+  },
+
+  async backfillProgress(unit) {
+    const r = open().prepare("SELECT unit, status, cursor, rows_added AS rowsAdded, calls, started, finished, error FROM backfill_progress WHERE unit = ?").get(unit);
+    return r ? { ...r } as BackfillProgress : null;
+  },
+
+  async saveBackfillProgress(p: BackfillProgress) {
+    open().prepare(`INSERT INTO backfill_progress (unit, status, cursor, rows_added, calls, started, finished, error) VALUES (?,?,?,?,?,?,?,?)
+      ON CONFLICT(unit) DO UPDATE SET status = excluded.status, cursor = excluded.cursor, rows_added = excluded.rows_added,
+        calls = excluded.calls, started = excluded.started, finished = excluded.finished, error = excluded.error`)
+      .run(p.unit, p.status, p.cursor, p.rowsAdded, p.calls, p.started, p.finished, p.error);
+  },
+
   async saveContracts(rows: Contract[]) {
     const d = open();
     const at = now();
@@ -300,6 +371,7 @@ export const sqliteStore: Store = {
       fuelPrices: count("fuel_prices"),
       apsRows: count("aps_headcount"), apsReleases: Number(d.prepare("SELECT COUNT(DISTINCT release) AS n FROM aps_headcount").get().n),
       expenses: count("ipea_expenses"),
+      contractReleases: count("contract_releases"),
       lastRun: run ? { startedAt: run.started_at, finishedAt: run.finished_at, ok: !!run.ok, saved: run.saved, failed: run.failed } : null,
     };
   },

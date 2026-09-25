@@ -2,10 +2,15 @@
 // today; a hosted store (Supabase/Postgres) only has to implement the same
 // methods and be returned from lib/db/index.ts.
 import type { Series, Point } from "../sources/types";
-import type { Contract, Notice } from "../sources/austender";
+import type { Contract, Notice, Release } from "../sources/austender";
 import type { FuelPrice } from "../sources/fuel/types";
 import type { ApsRow } from "../sources/apsc";
 import type { ExpenseRow } from "../sources/ipea";
+
+export type BackfillProgress = {
+  unit: string; status: "pending" | "running" | "done" | "failed"; cursor: string | null;
+  rowsAdded: number; calls: number; started: string | null; finished: string | null; error: string | null;
+};
 
 export type CompanyRow = { abn: string; name: string; incomeYear: string; income: number; taxable: number; tax: number };
 
@@ -36,6 +41,7 @@ export type DbStats = {
   apsRows: number; // cells of the APS headcount tables, one row each
   apsReleases: number;
   expenses: number; // parliamentarians' expense lines from IPEA
+  contractReleases: number; // every AusTender release (original notices and amendments), every API field
   lastRun: { startedAt: string; finishedAt: string | null; ok: boolean; saved: number; failed: number } | null;
 };
 
@@ -70,6 +76,11 @@ export interface Store {
   saveApsHeadcount(rows: ApsRow[]): Promise<{ added: number }>;
   // Every parliamentarian expense line IPEA publishes, one row each, every column as published.
   saveExpenses(rows: ExpenseRow[]): Promise<{ added: number }>;
+  // One row per contract per release from the AusTender API, every field, keyed by release id and CN id.
+  saveReleases(rows: Release[]): Promise<{ added: number }>;
+  // Backfill bookkeeping: one row per unit (e.g. contracts:FY2025-26), with the cursor a walked unit reached.
+  backfillProgress(unit: string): Promise<BackfillProgress | null>;
+  saveBackfillProgress(p: BackfillProgress): Promise<void>;
 
   startRun(): Promise<number>;
   finishRun(id: number, results: RunResult[]): Promise<void>;

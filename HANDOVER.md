@@ -17,10 +17,14 @@ and agencies, never named public servants. Publish the method for every claim.
     npm install
     npm run dev -- -p 3070        # 3000 to 3060 are usually taken on this machine
     npm run snapshot              # store today's figures in the database AND build the public site into out/
+    npm run backfill -- contracts:FY2025-26   # one unit of history into the database, resumable (docs/backfill.md)
 
 `npm run snapshot` is a static export (`STATIC_EXPORT=1 SNAPSHOT=1 next build`). The snapshot runs inside the
 build, in `app/api/snapshot/route.ts`, because the source loaders use Next's cache and can't run outside a Next
 process. Stop the dev server before running it; both use `.next`.
+
+`npm run backfill` runs outside Next, in plain Node (`scripts/ts-loader.mjs` lets Node load the project's TypeScript), so it
+can run while the dev server is up. It fills one unit of history at a time and resumes from its cursor if stopped.
 
 Needs Node 22.5 or later (built-in SQLite). Developed on Node 24. There are no tests.
 Public repository: https://github.com/MrAnderson-bot/receipts (AGPLv3, `LICENSE` in place). `docs/HANDOVER-launch.md`

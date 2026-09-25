@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "snapshot": "node scripts/snapshot.mjs"
+    "snapshot": "node scripts/snapshot.mjs",
+    "backfill": "node --no-warnings scripts/backfill.mjs"
   },
   "dependencies": {
     "next": "15.5.2",

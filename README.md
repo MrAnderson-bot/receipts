@@ -17,6 +17,10 @@ To store today's figures in the local database and build the public site as plai
 That runs a static export (`STATIC_EXPORT=1 SNAPSHOT=1 next build`). Every page is rendered once from the live
 sources, and the snapshot is saved from the same fetches. Stop the dev server first: both use `.next`.
 
+To fill in history one financial year at a time (resumable; see `docs/backfill.md`):
+
+    npm run backfill -- contracts:FY2025-26
+
 Needs Node 22.5 or later. See `HANDOVER.md` for project status, the database, hosting and what to do next.
 
 ## Pages
@@ -157,7 +161,10 @@ To add a state, write a loader that returns `StateSummary` and add it to `LOADER
   is a stand-in. Say so whenever the figure is quoted.
 - Categories are the first two digits of the UNSPSC code the agency chose (`lib/unspsc.ts`).
   Segments 70 and above are services.
-- Amendments (IDs ending `-A1`, or tag `contractAmendment`) are counted but excluded from totals.
+- Amendments carry the tag `contractAmendment`, the same CN id as the original, and their own award id and page; the `-A1`
+  suffix appears only on the web page. They are counted but excluded from totals. Only `contractLastModified` returns them
+  reliably; `contractPublished` files them under the original publish date. `contracts[].dateSigned` equals the publish
+  timestamp on an original notice and the original publish date on an amendment (see `docs/query-audit.md`).
 
 ## Check before posting figures
 
