@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { tryGetBudget } from "@/lib/sources/budget";
+import { tryGetAssetSales } from "@/lib/sources/finance-sales";
 import type { YearValue } from "@/lib/sources/treasury";
 import type { Series } from "@/lib/sources/types";
-import { money, pct } from "@/lib/format";
+import { money, num, pct } from "@/lib/format";
 import { LineChart } from "@/components/LineChart";
 
 export const revalidate = 86_400;
@@ -13,7 +14,7 @@ const at = (s: YearValue[], year: string) => s.find((p) => p.year === year)?.val
 const signedMoney = (n: number) => `${n < 0 ? "−" : ""}${money(Math.abs(n))}`;
 
 export default async function Page() {
-  const { data: b, error } = await tryGetBudget();
+  const [{ data: b, error }, sales] = await Promise.all([tryGetBudget(), tryGetAssetSales()]);
   if (!b) {
     return (
       <section className="error">
@@ -162,6 +163,61 @@ export default async function Page() {
           {src("PBS program expenses line items")}
         </section>
       )}
+
+      <section>
+        <h2>Assets sold since 1987</h2>
+        {sales.data ? (
+          <>
+            <div className="figures">
+              <div>
+                <strong>{money(sales.data.total)}</strong>
+                <span>raised from selling {num(sales.data.sales.length)} Commonwealth businesses and holdings, in the dollars of the day</span>
+              </div>
+              <div>
+                <strong>{sales.data.largest[0] ? money(sales.data.largest[0].proceeds!) : "n/a"}</strong>
+                <span>{sales.data.largest[0] ? `the largest: ${sales.data.largest[0].name}, ${sales.data.largest[0].when}` : ""}</span>
+              </div>
+              <div>
+                <strong>{sales.data.byDecade.sort((x, y) => y.value - x.value)[0]?.decade ?? "n/a"}</strong>
+                <span>the decade that sold the most, {money(sales.data.byDecade[0]?.value ?? 0)} across {num(sales.data.byDecade[0]?.count ?? 0)} sales</span>
+              </div>
+            </div>
+            <p className="note">
+              Trade sales and public share offers managed by the Commonwealth, as the Department of Finance lists them.
+              Property sales and sales run by agencies themselves are not on the list. Proceeds are as published at the
+              time and not adjusted for inflation.
+            </p>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">When</th>
+                    <th scope="col">What was sold</th>
+                    <th scope="col">How</th>
+                    <th scope="col" className="num">Proceeds</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...sales.data.sales].reverse().map((s) => (
+                    <tr key={s.when + s.name}>
+                      <td>{s.when}</td>
+                      <td>
+                        <a href={sales.data!.sourceUrl} target="_blank" rel="noreferrer">{s.name}</a>
+                        {s.note && <div className="desc">{s.note}</div>}
+                      </td>
+                      <td>{s.kind}</td>
+                      <td className="num">{s.proceeds !== null ? money(s.proceeds) : "not stated"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="src"><a href={sales.data.sourceUrl} target="_blank" rel="noreferrer">Department of Finance, past sales</a></p>
+          </>
+        ) : (
+          <p className="note">The Department of Finance’s past sales page didn’t load. {sales.error}</p>
+        )}
+      </section>
 
       <footer>
         Source: {b.edition}, published by the Department of Finance on data.gov.au under CC BY 4.0. Past

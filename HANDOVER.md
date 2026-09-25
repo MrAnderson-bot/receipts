@@ -40,6 +40,8 @@ and `docs/launch-tools/` are owner-only and git-ignored.
 | `/grants` | Commonwealth grant awards (same ranges) |
 | `/states` | NSW, VIC, QLD, WA, NT, TAS contracts and ACT invoices. `/states/QLD` etc. |
 | `/migration` | Net overseas migration, temporary visa holders, permanent program, skilled and working holiday grants, citizenship by country |
+| `/parliament` | Every MP and senator: divisions attended, votes against their party, by party and by house. They Vote For You, third-party, needs `TVFY_API_KEY` (the older name `THEY_VOTE_FOR_YOU_API_KEY` in `.env.local` also works) |
+| `/revisions` | Every stored figure a publisher changed after first publication (first value, current value, when each was seen), grouped by publisher; and contract amendments in the last 90 days matched to the original notice to show how much each contract grew |
 | `/sources` | Every feed with live status, database totals, and what isn't connected |
 
 ## How the code is laid out
@@ -218,11 +220,9 @@ arrive in the next Budget's tables). WA's newest open contract file is 2023-24. 
    underemployment, hours, vacancies), productivity, and a real-wages line.
 6. **More sources**: ASIC insolvencies, ABS Government Finance Statistics for state budgets and debt, AEC political
    donations (joinable to contracts by name), DSS payment recipients, net overseas migration.
-7. **They Vote For You** (parliamentary voting records). The API key is already in `.env.local` as
-   `THEY_VOTE_FOR_YOU_API_KEY`; nothing reads it yet. Add it as a `lib/sources/` module like the others. Settle two
-   things first: it is run by the OpenAustralia Foundation from Hansard, not a government publisher, so it is an
-   exception to "official sources only" and must be labelled as third-party on `/sources`; and confirm its licence
-   before it goes in any paid product.
+7. ~~**They Vote For You**~~ Done 25 September 2026: `lib/sources/tvfy.ts` and `/parliament`, labelled third-party on
+   `/sources`. Still to do: put the key on the VM as `TVFY_API_KEY` in `/etc/receipts.env` (the site builds without it
+   and says so on the page), and confirm the CC BY-SA licence before the data goes in any paid product.
 8. **Forecasts to model against**: the RBA's quarterly forecast tables, and the Budget's economic parameters, which
    are already inside the data.gov.au zip that `budget.ts` downloads.
 9. **Then the prediction engine**, starting with a plain, documented model over the stored series.

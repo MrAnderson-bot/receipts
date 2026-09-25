@@ -10,6 +10,8 @@ import { tryGetBudget } from "@/lib/sources/budget";
 import { tryGetTransparency } from "@/lib/sources/ato-transparency";
 import { tryGetState, STATE_CODES, NOT_CONNECTED as STATES_NOT_CONNECTED } from "@/lib/sources/states";
 import { tryGetMigration } from "@/lib/sources/migration";
+import { tryGetAssetSales } from "@/lib/sources/finance-sales";
+import { tryGetParliament, NO_KEY } from "@/lib/sources/tvfy";
 import { getStore, type DbStats } from "@/lib/db";
 import { num } from "@/lib/format";
 
@@ -34,9 +36,10 @@ const NOT_CONNECTED = [
 ];
 
 export default async function Page() {
-  const [indicators, spending, grants, revenue, levels, budget, companies, migration, ...states] = await Promise.all([
+  const [indicators, spending, grants, revenue, levels, budget, companies, migration, sales, parliament, ...states] = await Promise.all([
     getIndicators(), tryGetSummary(7), tryGetGrants(7), tryGetRevenue(), tryGetTaxByLevel(),
-    tryGetBudget(), tryGetTransparency(), tryGetMigration(), ...STATE_CODES.map((c) => tryGetState(c)),
+    tryGetBudget(), tryGetTransparency(), tryGetMigration(), tryGetAssetSales(), tryGetParliament(),
+    ...STATE_CODES.map((c) => tryGetState(c)),
   ]);
   const okIds = new Set(indicators.filter((r) => r.series).map((r) => r.id));
   const count = (ids: string[]) => `${ids.filter((id) => okIds.has(id)).length} of ${ids.length} series answering`;
@@ -128,6 +131,24 @@ export default async function Page() {
       licence: "CC BY 4.0",
       ok: !!migration.nom.data,
       status: migration.nom.data ? `To ${migration.nom.data.latest.year.replace(/^FY/, "")}` : `Not answering. ${migration.nom.error}`,
+    },
+    {
+      name: "Department of Finance, past sales of government businesses",
+      url: sales.data?.sourceUrl ?? "https://www.finance.gov.au/government/government-business-enterprises/past-sales",
+      gives: "every trade sale and public share offer managed by the Commonwealth since 1988, with month and proceeds",
+      licence: "CC BY 4.0",
+      ok: !!sales.data,
+      status: sales.data ? `${num(sales.data.sales.length)} sales read from the page` : `Not answering. ${sales.error}`,
+    },
+    {
+      name: "They Vote For You (OpenAustralia Foundation), API",
+      url: "https://theyvoteforyou.org.au/help/data",
+      gives: "every MP’s and senator’s divisions attended and votes against their party. Not a government publisher: built from Hansard, the parliament’s own record, by a charity",
+      licence: "CC BY-SA, attribution to They Vote For You",
+      ok: !!parliament.data,
+      status: parliament.data
+        ? `${num(parliament.data.members.length)} members`
+        : parliament.error === NO_KEY ? "Not connected: needs a free API key (TVFY_API_KEY)" : `Not answering. ${parliament.error}`,
     },
     ...states.map((s, i) => ({
       name: s.data ? `${s.data.name}: ${s.data.sourceName}` : `${STATE_CODES[i]} contracts`,

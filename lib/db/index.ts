@@ -3,7 +3,7 @@
 import { sqliteStore } from "./sqlite";
 import type { Store } from "./types";
 
-export type { Store, DbStats, CompanyRow, ContractRow, Contradiction, RunResult } from "./types";
+export type { Store, DbStats, CompanyRow, ContractRow, Contradiction, Revision, RunResult } from "./types";
 
 export function getStore(): Store {
   return sqliteStore;

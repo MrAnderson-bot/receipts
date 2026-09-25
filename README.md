@@ -31,6 +31,8 @@ Needs Node 22.5 or later. See `HANDOVER.md` for project status, the database, ho
 - `/grants`: Commonwealth grant awards by category, selection process, agency, recipient and state (`/grants/7`, `/grants/90`)
 - `/states`: state and territory contracts (`/states/VIC`, `/states/QLD` and so on; NSW by default), plus the state with no usable data and why
 - `/migration`: net overseas migration (ABS), temporary visa holders by category, permanent Migration Program outcomes, skilled and working holiday visas granted, NOM by visa category and new citizens by former citizenship (Home Affairs)
+- `/parliament`: how every MP and senator votes (attendance and votes against their party), from They Vote For You; needs a free API key
+- `/revisions`: every stored figure a publisher has changed since it was first published, and contract amendments matched to their original notice
 - `/sources`: every feed, its licence, whether it answered, and what isn't connected yet
 
 ## Database
@@ -59,6 +61,8 @@ One module per source in `lib/sources`, all returning the shapes in `lib/sources
 | `states/nt.ts` | NT tenders site export of awarded contracts (xlsx), listed on data.nt.gov.au | state contracts, last 12 months |
 | `states/tas.ts` | Tasmanian tenders site, awarded list plus one page per contract (HTML) | state contracts, rolling 30 days |
 | `states/act.ts` | ACT Notifiable Invoices Register on data.act.gov.au (Socrata API, CC BY 4.0) | invoices of $25,000 and over, last 12 months |
+| `finance-sales.ts` | Department of Finance "Past sales" page (HTML, CC BY 4.0) | every Commonwealth business sold since 1988: month, proceeds, trade sale or share offer |
+| `tvfy.ts` | They Vote For You API (OpenAustralia Foundation, CC BY-SA; built from Hansard, not a government publisher) | current MPs and senators, divisions attended, rebellions. Needs `TVFY_API_KEY` |
 | `states/wa.ts` | Tenders WA award CSV on data.wa.gov.au (CC BY 4.0) | state contracts, latest released financial year |
 | `ato-transparency.ts` | ATO Corporate Tax Transparency on data.gov.au, xlsx (CC BY 3.0 AU) | each large company's total income, taxable income, tax payable |
 | `abs-profits.ts` | ABS Business Indicators via the Data API (CC BY 4.0) | company gross operating profits by industry, quarterly |
