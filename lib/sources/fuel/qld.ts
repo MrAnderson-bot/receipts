@@ -4,7 +4,7 @@
 // each site's last price is taken. That file is up to a month behind.
 // Calls with a key: see fpdapi.ts; about 4 or 5 a day. Without one: two requests to data.qld.gov.au a day.
 import { parseCsv } from "../../csv";
-import { USER_AGENT } from "../../xlsx";
+import { httpGet, httpJson } from "./http";
 import { fpdapiPrices } from "./fpdapi";
 import { needsKey, normaliseFuel, summarise, type FuelPrice, type FuelSummary } from "./types";
 
@@ -35,22 +35,21 @@ const iso = (raw: string) => {
 };
 
 async function loadQldFile(): Promise<FuelSummary> {
-  const headers = { "User-Agent": USER_AGENT };
   // One dataset per calendar year; January's file lands in the previous year's dataset until the new one exists.
   const year = new Date().getFullYear();
   let dataset: any = null;
   for (const y of [year, year - 1]) {
-    const res = await fetch(`${CKAN}/package_show?id=fuel-price-reporting-${y}`, { headers, cache: "no-store" });
-    if (res.ok) { dataset = (await res.json()).result; break; }
+    const res = await httpJson(`${CKAN}/package_show?id=fuel-price-reporting-${y}`);
+    if (res.status === 200 && res.json?.result) { dataset = res.json.result; break; }
   }
   if (!dataset) throw new Error("no fuel-price-reporting dataset found on data.qld.gov.au");
   const files: any[] = dataset.resources.filter((r: any) => /csv/i.test(r.format)).sort((a: any, b: any) => String(b.last_modified).localeCompare(String(a.last_modified)));
   const file = files[0];
   if (!file) throw new Error(`no CSV in ${dataset.title}`);
 
-  const res = await fetch(file.url, { headers, cache: "no-store" });
-  if (!res.ok) throw new Error(`data.qld.gov.au returned ${res.status} for ${file.name}`);
-  const rows = parseCsv(await res.text());
+  const res = await httpGet(file.url);
+  if (res.status !== 200) throw new Error(`data.qld.gov.au returned ${res.status} for ${file.name}`);
+  const rows = parseCsv(res.body);
   const col = Object.fromEntries(rows[0].map((h, i) => [h.replace(/^﻿/, ""), i]));
   const get = (r: string[], name: string) => r[col[name]] ?? "";
 

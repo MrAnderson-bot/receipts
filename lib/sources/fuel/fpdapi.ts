@@ -8,7 +8,7 @@
 // that for eight hours. So a scheme costs at most 3 price calls and 1 station call a day, plus 3
 // reference calls a week: about 4 or 5 a day.
 import { unstable_cache } from "next/cache";
-import { USER_AGENT } from "../../xlsx";
+import { httpJson } from "./http";
 import { normaliseFuel, type FuelPrice } from "./types";
 
 const COUNTRY = 21; // Australia
@@ -18,13 +18,10 @@ const DAY = 24 * 3_600;
 type Region = { GeoRegionId: number; GeoRegionLevel: number; Name: string; Abbrev?: string; GeoRegionParentId?: number | null };
 
 async function get<T>(base: string, token: string, path: string): Promise<T> {
-  const res = await fetch(`${base}${path}`, {
-    headers: { Authorization: `FPDAPI SubscriberToken=${token}`, "User-Agent": USER_AGENT, Accept: "application/json" },
-    cache: "no-store",
-  });
+  const res = await httpJson<T>(`${base}${path}`, { Authorization: `FPDAPI SubscriberToken=${token}` });
   if (res.status === 401) throw new Error("the subscriber token was rejected (401); check the key in /etc/receipts.env");
-  if (!res.ok) throw new Error(`${new URL(base).host} returned ${res.status} for ${path}`);
-  return res.json();
+  if (res.status !== 200 || res.json === null) throw new Error(`${new URL(base).host} returned ${res.status} for ${path}`);
+  return res.json;
 }
 
 type Reference = { regions: Region[]; brands: { BrandId: number; Name: string }[]; fuels: { FuelId: number; Name: string }[] };

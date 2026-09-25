@@ -6,7 +6,7 @@
 // tolerates their casing. Check the first live run against the approval pack.
 //
 // Calls: one per load, cached for eight hours by lib/sources/fuel/index.ts, so at most 3 a day.
-import { USER_AGENT } from "../../xlsx";
+import { httpJson } from "./http";
 import { needsKey, normaliseFuel, summarise, type FuelPrice, type FuelSummary } from "./types";
 
 const APPLY = "https://service.vic.gov.au/find-services/transport-and-driving/servo-saver/help-centre/servo-saver-public-api/apply-for-servo-saver-public-api";
@@ -22,12 +22,9 @@ const pick = (o: any, ...names: string[]) => {
 
 export async function loadVic(): Promise<FuelSummary> {
   if (vicKey()) throw new Error(vicKey()!);
-  const res = await fetch(process.env.FUEL_VIC_URL!, {
-    headers: { "x-api-consumer-id": process.env.FUEL_VIC_CONSUMER_ID!, Accept: "application/json", "User-Agent": USER_AGENT },
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`Servo Saver API returned ${res.status}`);
-  const json = await res.json();
+  const res = await httpJson(process.env.FUEL_VIC_URL!, { "x-api-consumer-id": process.env.FUEL_VIC_CONSUMER_ID! });
+  if (res.status !== 200 || res.json === null) throw new Error(`Servo Saver API returned ${res.status}`);
+  const json = res.json;
   const list: any[] = Array.isArray(json) ? json : pick(json, "stations", "sites", "data", "results") ?? [];
 
   const prices: FuelPrice[] = [];

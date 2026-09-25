@@ -7,7 +7,7 @@
 // price in both states in one response (`states=NSW|TAS`; without that parameter the API returns
 // NSW only). The nightly build loads it twice at most (page render and snapshot), so 4 calls a day,
 // about 120 a month.
-import { USER_AGENT } from "../../xlsx";
+import { httpJson } from "./http";
 import { needsKey, normaliseFuel, summarise, type FuelPrice, type FuelSummary } from "./types";
 
 const BASE = "https://api.onegov.nsw.gov.au";
@@ -30,22 +30,18 @@ type Priced = FuelPrice & { state: string };
 
 async function fetchAll(): Promise<Priced[]> {
   const key = process.env.FUELCHECK_NSW_KEY!, secret = process.env.FUELCHECK_NSW_SECRET!;
-  const auth = await fetch(`${BASE}/oauth/client_credential/accesstoken?grant_type=client_credentials`, {
-    headers: { Authorization: `Basic ${Buffer.from(`${key}:${secret}`).toString("base64")}`, "User-Agent": USER_AGENT },
-    cache: "no-store",
+  const auth = await httpJson(`${BASE}/oauth/client_credential/accesstoken?grant_type=client_credentials`, {
+    Authorization: `Basic ${Buffer.from(`${key}:${secret}`).toString("base64")}`,
   });
-  if (!auth.ok) throw new Error(`FuelCheck token request returned ${auth.status}; check the key and secret`);
-  const token = (await auth.json()).access_token;
+  if (auth.status !== 200 || !auth.json?.access_token) throw new Error(`FuelCheck token request returned ${auth.status}; check the key and secret`);
+  const token = auth.json.access_token;
 
-  const res = await fetch(`${BASE}/FuelPriceCheck/v2/fuel/prices?states=${encodeURIComponent(STATES.join("|"))}`, {
-    headers: {
-      apikey: key, Authorization: `Bearer ${token}`, transactionid: crypto.randomUUID(), requesttimestamp: stamp(),
-      "Content-Type": "application/json; charset=utf-8", "User-Agent": USER_AGENT,
-    },
-    cache: "no-store",
+  const res = await httpJson(`${BASE}/FuelPriceCheck/v2/fuel/prices?states=${encodeURIComponent(STATES.join("|"))}`, {
+    apikey: key, Authorization: `Bearer ${token}`, transactionid: crypto.randomUUID(), requesttimestamp: stamp(),
+    "Content-Type": "application/json; charset=utf-8",
   });
-  if (!res.ok) throw new Error(`FuelCheck returned ${res.status}`);
-  const json = await res.json();
+  if (res.status !== 200 || res.json === null) throw new Error(`FuelCheck returned ${res.status}`);
+  const json = res.json;
   // Station codes are not unique across states, so the key carries the state too.
   const stationKey = (code: unknown, state: unknown) => `${String(state ?? "").toUpperCase()}:${String(code)}`;
   const stations = new Map<string, any>((json.stations ?? []).map((s: any) => [stationKey(s.code, s.state), s]));

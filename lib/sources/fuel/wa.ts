@@ -3,7 +3,7 @@
 // exact for the day. One request per product: the feed's title says "All Metro
 // Regions" but it carries every site in the state (Kalgoorlie, Broome and the
 // Gascoyne are all in it), and the StateRegion filter only repeats those rows.
-import { USER_AGENT } from "../../xlsx";
+import { httpGet } from "./http";
 import { normaliseFuel, summarise, type FuelPrice, type FuelSummary, type FuelType } from "./types";
 
 const RSS = "https://www.fuelwatch.wa.gov.au/fuelwatch/fuelWatchRSS";
@@ -23,9 +23,9 @@ export async function loadWa(): Promise<FuelSummary> {
   const jobs = PRODUCTS.flatMap(([product, fuel, fuelRaw]) =>
     REGIONS.map(async (region) => {
       const url = `${RSS}?Product=${product}${region === null ? "" : `&StateRegion=${region}`}`;
-      const res = await fetch(url, { headers: { "User-Agent": USER_AGENT }, cache: "no-store" });
-      if (!res.ok) throw new Error(`FuelWatch returned ${res.status} for product ${product}`);
-      const xml = await res.text();
+      const res = await httpGet(url);
+      if (res.status !== 200) throw new Error(`FuelWatch returned ${res.status} for product ${product}`);
+      const xml = res.body;
       const out: FuelPrice[] = [];
       for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
         const item = m[1];
