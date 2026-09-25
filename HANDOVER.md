@@ -232,6 +232,25 @@ South Australia's contracts (same blocked system as Victoria). Earnings of ASX-l
 PDF announcements, commercial licensing). The Final Budget Outcome as its own document (PDF only; its figures
 arrive in the next Budget's tables). WA's newest open contract file is 2023-24. Tasmania only exposes 30 days.
 
+## For tomorrow: three kinds of history the backfill can't fetch yet (written 25 September 2026)
+
+The backfill loop on the VM now fetches old records for seven kinds of data (see `lib/scorecard.ts` note above and
+`docs/backfill.md`). Three kinds are still missing, each for a different reason. Nothing else is waiting on them;
+the loop runs the rest and finishes on its own.
+
+1. **Who voted for what in Parliament.** The site shows this but never saves it. Keeping the history means new
+   storage (one table of divisions since 2006, one of each member's vote) and code to fetch it year by year from
+   They Vote For You. That data is third-party under a CC BY-SA licence that may not allow it in a paid product.
+   **Decision needed:** is that licence acceptable? If yes, build it; if not, leave the page reading live.
+2. **State government contracts.** The site only shows each state's recent contracts and saves none of them. Getting
+   the history means a `state_contracts` table and separate fetching code for NSW, the ACT, the NT, WA and Queensland,
+   because each publishes differently (the NT gives every award since 2012 in one file; NSW and the ACT take date
+   ranges; WA has one file per financial year; Queensland's agency files are patchy). Tasmania and Victoria publish
+   no history. **Suggested first**, as the biggest hole in the spending record.
+3. **Petrol prices.** Recorded only since September 2026. Old prices exist as monthly files (NSW since 2016,
+   Queensland since 2018, WA since 2001), each state's in its own layout, so one parser per state and hundreds of
+   small units. Lowest value of the three; do last, if at all.
+
 ## What to do next, in order
 
 1. ~~Put it in git~~ Done: https://github.com/MrAnderson-bot/receipts, AGPLv3.
