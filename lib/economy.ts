@@ -2,6 +2,7 @@
 // never blanks the page: each series carries its own error.
 import { ABS_SERIES, fetchAbs } from "./sources/abs";
 import { RBA_SERIES, fetchRba } from "./sources/rba";
+import { fetchAgs } from "./sources/aofm";
 import { DERIVED } from "./derived";
 import type { Series, SeriesResult } from "./sources/types";
 
@@ -24,6 +25,7 @@ export async function getIndicators(ids?: string[]): Promise<SeriesResult[]> {
   const jobs = [
     ...ABS_SERIES.map((s) => ({ id: s.id, label: s.label, run: () => fetchAbs(s) })),
     ...RBA_SERIES.map((s) => ({ id: s.id, label: s.label, run: () => fetchRba(s) })),
+    { id: "ags-on-issue", label: "Government securities on issue", run: () => fetchAgs() }, // shown on the budget page
   ].filter((j) => !wanted || wanted.has(j.id));
 
   const settled = await Promise.allSettled(jobs.map((j) => j.run()));

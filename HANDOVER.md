@@ -44,6 +44,7 @@ and `docs/launch-tools/` are owner-only and git-ignored.
 | `/crime` | Victims of recorded crime by offence and state (ABS, since 1993), offenders by principal offence and state (ABS, since 2008-09), people homeless on Census night (ABS) and people helped by homelessness services with reasons (AIHW, since 2011-12) |
 | `/parliament` | Every MP and senator: divisions attended, votes against their party, by party and by house. They Vote For You, third-party, needs `TVFY_API_KEY` (the older name `THEY_VOTE_FOR_YOU_API_KEY` in `.env.local` also works) |
 | `/revisions` | Every stored figure a publisher changed after first publication (first value, current value, when each was seen), grouped by publisher; and contract amendments in the last 90 days matched to the original notice to show how much each contract grew |
+| `/government` | APS headcount from the APSC's half-yearly releases on data.gov.au: total and change, by gender and level, 15 largest agencies, twenty-year history. Every cell of the agency table is stored in `aps_headcount`. Gross debt (AOFM securities on issue) is on `/budget` |
 | `/sources` | Every feed with live status, database totals, and what isn't connected |
 
 ## How the code is laid out

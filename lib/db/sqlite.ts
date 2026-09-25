@@ -5,6 +5,7 @@ import path from "path";
 import type { Series } from "../sources/types";
 import { noticePageId, type Contract, type Notice } from "../sources/austender";
 import type { FuelPrice } from "../sources/fuel/types";
+import type { ApsRow } from "../sources/apsc";
 import type { CompanyRow, Contradiction, DbStats, Revision, RunResult, Store } from "./types";
 
 const FILE = path.join(process.cwd(), "data", "receipts.db");
@@ -55,6 +56,11 @@ CREATE TABLE IF NOT EXISTS fuel_prices (
   name TEXT NOT NULL, brand TEXT NOT NULL, address TEXT NOT NULL, suburb TEXT NOT NULL, postcode TEXT,
   lat REAL, lng REAL, price REAL NOT NULL, reported_at TEXT NOT NULL, captured_at TEXT NOT NULL,
   PRIMARY KEY (state, site_id, fuel_raw)
+);
+CREATE TABLE IF NOT EXISTS aps_headcount (
+  release TEXT NOT NULL, agency TEXT NOT NULL, parent TEXT, gender TEXT NOT NULL, classification TEXT NOT NULL,
+  headcount INTEGER, source_url TEXT NOT NULL, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL,
+  PRIMARY KEY (release, agency, gender, classification)
 );
 CREATE TABLE IF NOT EXISTS runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, finished_at TEXT,
@@ -210,6 +216,22 @@ export const sqliteStore: Store = {
       ORDER BY value DESC LIMIT ?`).all(limit);
   },
 
+  async saveApsHeadcount(rows: ApsRow[]) {
+    const d = open();
+    const at = now();
+    const insert = d.prepare(`INSERT INTO aps_headcount (release, agency, parent, gender, classification, headcount, source_url, first_seen, last_seen)
+      VALUES (?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(release, agency, gender, classification) DO UPDATE SET parent = excluded.parent, headcount = excluded.headcount,
+        source_url = excluded.source_url, last_seen = excluded.last_seen`);
+    const before = Number(d.prepare("SELECT COUNT(*) AS n FROM aps_headcount").get().n);
+    d.exec("BEGIN");
+    try {
+      for (const r of rows) insert.run(r.release, r.agency, r.parent, r.gender, r.classification, r.headcount, r.sourceUrl, at, at);
+      d.exec("COMMIT");
+    } catch (e) { d.exec("ROLLBACK"); throw e; }
+    return { added: Number(d.prepare("SELECT COUNT(*) AS n FROM aps_headcount").get().n) - before };
+  },
+
   async startRun() {
     return Number(open().prepare("INSERT INTO runs (started_at) VALUES (?)").run(now()).lastInsertRowid);
   },
@@ -244,6 +266,7 @@ export const sqliteStore: Store = {
       series: count("series"), observations: count("observations"), snapshots: count("snapshots"), companies: count("companies"),
       contracts: count("contracts"), noticesRead: count("contracts WHERE notice_read_at IS NOT NULL"),
       fuelPrices: count("fuel_prices"),
+      apsRows: count("aps_headcount"), apsReleases: Number(d.prepare("SELECT COUNT(DISTINCT release) AS n FROM aps_headcount").get().n),
       lastRun: run ? { startedAt: run.started_at, finishedAt: run.finished_at, ok: !!run.ok, saved: run.saved, failed: run.failed } : null,
     };
   },

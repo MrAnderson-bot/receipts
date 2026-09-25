@@ -4,6 +4,7 @@
 import type { Series, Point } from "../sources/types";
 import type { Contract, Notice } from "../sources/austender";
 import type { FuelPrice } from "../sources/fuel/types";
+import type { ApsRow } from "../sources/apsc";
 
 export type CompanyRow = { abn: string; name: string; incomeYear: string; income: number; taxable: number; tax: number };
 
@@ -31,6 +32,8 @@ export type DbStats = {
   contracts: number;
   noticesRead: number;
   fuelPrices: number; // station prices held right now, one per station and fuel
+  apsRows: number; // cells of the APS headcount tables, one row each
+  apsReleases: number;
   lastRun: { startedAt: string; finishedAt: string | null; ok: boolean; saved: number; failed: number } | null;
 };
 
@@ -61,6 +64,8 @@ export interface Store {
   // rows for that state. Thousands of stations a day would outgrow the VM's disk if kept; the state-level
   // history lives in snapshots instead.
   saveFuelPrices(state: string, rows: FuelPrice[]): Promise<number>;
+  // APS headcount: every cell of the APSC's agency-by-gender-by-classification table, per release.
+  saveApsHeadcount(rows: ApsRow[]): Promise<{ added: number }>;
 
   startRun(): Promise<number>;
   finishRun(id: number, results: RunResult[]): Promise<void>;

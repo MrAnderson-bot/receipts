@@ -15,6 +15,7 @@ import { tryGetHomelessness } from "@/lib/sources/homelessness";
 import { tryGetFuel, FUEL_CODES, keyNeeded, NOT_CONNECTED as FUEL_NOT_CONNECTED } from "@/lib/sources/fuel";
 import { tryGetAssetSales } from "@/lib/sources/finance-sales";
 import { tryGetParliament, NO_KEY } from "@/lib/sources/tvfy";
+import { tryGetAps } from "@/lib/sources/apsc";
 import { getStore, type DbStats } from "@/lib/db";
 import { num } from "@/lib/format";
 
@@ -40,12 +41,13 @@ const NOT_CONNECTED = [
 ];
 
 export default async function Page() {
-  const [indicators, spending, grants, revenue, levels, budget, companies, migration, crime, homelessness, sales, parliament, ...states] = await Promise.all([
+  const [indicators, spending, grants, revenue, levels, budget, companies, migration, crime, homelessness, sales, parliament, aps, ...states] = await Promise.all([
     getIndicators(), tryGetSummary(7), tryGetGrants(7), tryGetRevenue(), tryGetTaxByLevel(),
-    tryGetBudget(), tryGetTransparency(), tryGetMigration(), tryGetCrime(), tryGetHomelessness(), tryGetAssetSales(), tryGetParliament(),
+    tryGetBudget(), tryGetTransparency(), tryGetMigration(), tryGetCrime(), tryGetHomelessness(), tryGetAssetSales(), tryGetParliament(), tryGetAps(),
     ...STATE_CODES.map((c) => tryGetState(c)),
   ]);
   const fuel = await Promise.all(FUEL_CODES.map((c) => tryGetFuel(c)));
+  const ags = indicators.find((r) => r.id === "ags-on-issue");
   const okIds = new Set(indicators.filter((r) => r.series).map((r) => r.id));
   const count = (ids: string[]) => `${ids.filter((id) => okIds.has(id)).length} of ${ids.length} series answering`;
   const absIds = ABS_SERIES.map((s) => s.id);
@@ -182,6 +184,22 @@ export default async function Page() {
         ? `${num(parliament.data.members.length)} members`
         : parliament.error === NO_KEY ? "Not connected: needs a free API key (TVFY_API_KEY)" : `Not answering. ${parliament.error}`,
     },
+    {
+      name: "Australian Public Service Commission, APS Employment Database on data.gov.au",
+      url: aps.data?.latest.datasetUrl ?? "https://data.gov.au/data/dataset/?q=APS+Employment+Data",
+      gives: "APS headcount by agency, gender and classification level at each half-yearly snapshot, and totals by gender back to 2006",
+      licence: "CC BY 3.0 AU",
+      ok: !!aps.data,
+      status: aps.data ? `${aps.data.releases.length} releases read, latest ${aps.data.latest.label}, ${num(aps.data.latest.total)} employees` : `Not answering. ${aps.error}`,
+    },
+    {
+      name: "Australian Office of Financial Management, data hub",
+      url: "https://www.aofm.gov.au/data-hub",
+      gives: "Australian Government Securities on issue, face value, monthly since 2010",
+      licence: "CC BY 4.0",
+      ok: !!ags?.series,
+      status: ags?.series ? `To ${ags.series.points[ags.series.points.length - 1].period}` : `Not answering. ${ags?.error ?? "not loaded"}`,
+    },
     ...states.map((s, i) => ({
       name: s.data ? `${s.data.name}: ${s.data.sourceName}` : `${STATE_CODES[i]} contracts`,
       url: s.data?.sourceUrl ?? "https://data.gov.au",
@@ -274,6 +292,7 @@ export default async function Page() {
             for the fields the API leaves out (execution date, Australian business flag, confidentiality, extension options).
             Fuel prices held for today: {num(db.fuelPrices)}, one per station and fuel, replaced each day; state-level medians
             are kept daily as snapshots.
+            APS headcount cells stored one row each: {num(db.apsRows)} across {num(db.apsReleases)} snapshots.
           </p>
           <p className="note" style={{ marginTop: 12 }}>
             {db.lastRun

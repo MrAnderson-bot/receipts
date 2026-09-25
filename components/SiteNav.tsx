@@ -18,6 +18,7 @@ const LINKS = [
   { href: "/crime", label: "Crime" },
   { href: "/parliament", label: "Parliament" },
   { href: "/revisions", label: "Revisions" },
+  { href: "/government", label: "Government" },
   { href: "/sources", label: "Sources" },
 ];
 
