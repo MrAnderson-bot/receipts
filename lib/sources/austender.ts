@@ -44,11 +44,18 @@ export type Category = {
   biggest: Contract | null;
 };
 
+// An amendment notice republishes a contract with its new total value; the id is the original's plus -A1, -A2 ...
+export type Amendment = {
+  id: string; baseId: string; awardId: string | null; agency: string; supplier: string; value: number; description: string;
+  published: string; end: string | null;
+};
+
 export type Summary = {
   from: Date;
   to: Date;
   contracts: Contract[];
   amendments: number;
+  amended: Amendment[]; // every amendment notice in the window, newest first
   totalValue: number;
   limitedValue: number;
   overseasValue: number;
@@ -332,10 +339,15 @@ export async function getSummary(days: number): Promise<Summary> {
 
   const seen = new Map<string, Contract>();
   let amendments = 0;
+  const amended: Amendment[] = [];
   for (const rel of releases) {
     for (const c of toContracts(rel)) {
       if (c.amendment) {
         amendments++;
+        amended.push({
+          id: c.id, baseId: c.id.replace(/-A\d+$/i, ""), awardId: c.awardId, agency: c.agency, supplier: c.supplier,
+          value: c.value, description: c.description, published: c.published, end: c.end,
+        });
         continue;
       }
       if (!seen.has(c.id)) {
@@ -410,7 +422,8 @@ export async function getSummary(days: number): Promise<Summary> {
     .sort((a, b) => b.value - a.value);
 
   return {
-    from, to, contracts, amendments, totalValue, limitedValue, overseasValue, servicesValue, lateCount,
+    from, to, contracts, amendments, amended: amended.sort((a, b) => b.published.localeCompare(a.published)),
+    totalValue, limitedValue, overseasValue, servicesValue, lateCount,
     knownStartCount: knownStart,
     daily: [...dailyMap.values()],
     topAgencies: rank(agencies, (a) => a.value, 8),

@@ -16,6 +16,12 @@ export type Contradiction = {
   published: string; supplierCountry: string | null; supplierAbn: string | null; australianBusiness: string | null;
 };
 
+// A period whose value changed after it was first stored: the publisher revised it.
+export type Revision = {
+  seriesId: string; label: string; unit: Series["unit"]; source: string; period: string;
+  firstValue: number; firstSeen: string; latestValue: number; latestSeen: string;
+};
+
 export type DbStats = {
   location: string;
   series: number;
@@ -34,6 +40,9 @@ export interface Store {
   // Time series. A changed value for a period is kept as a new row, so revisions by the publisher stay visible.
   saveSeries(series: Series): Promise<{ added: number; revised: number }>;
   seriesHistory(seriesId: string): Promise<(Point & { firstSeen: string; lastSeen: string })[]>;
+  revisions(): Promise<Revision[]>; // every period with more than one value, first and latest
+  // Stored contracts by id, for joining amendments back to the original notice.
+  contractsById(ids: string[]): Promise<Pick<Contract, "id" | "agency" | "supplier" | "value" | "description" | "published">[]>;
 
   // Page-level summaries (contracts, grants, states, budget ...), one per source, key and day.
   saveSnapshot(source: string, key: string, payload: unknown): Promise<void>;

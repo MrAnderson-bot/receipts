@@ -16,6 +16,8 @@ const LINKS = [
   { href: "/fuel", label: "Fuel" },
   { href: "/migration", label: "Migration" },
   { href: "/crime", label: "Crime" },
+  { href: "/parliament", label: "Parliament" },
+  { href: "/revisions", label: "Revisions" },
   { href: "/sources", label: "Sources" },
 ];
 

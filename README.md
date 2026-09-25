@@ -33,6 +33,8 @@ Needs Node 22.5 or later. See `HANDOVER.md` for project status, the database, ho
 - `/fuel`: fuel prices per state from each state's price reporting scheme: median and cheapest unleaded and diesel, the cheapest stations, and which schemes still need an API key
 - `/migration`: net overseas migration (ABS), temporary visa holders by category, permanent Migration Program outcomes, skilled and working holiday visas granted, NOM by visa category and new citizens by former citizenship (Home Affairs)
 - `/crime`: victims of recorded crime by offence since 1993 and offenders by principal offence since 2008-09, counts and rates per 100,000, Australia and each state (ABS); people homeless on Census night (ABS) and people helped by homelessness services each year, by state, with the reasons they asked (AIHW)
+- `/parliament`: how every MP and senator votes (attendance and votes against their party), from They Vote For You; needs a free API key
+- `/revisions`: every stored figure a publisher has changed since it was first published, and contract amendments matched to their original notice
 - `/sources`: every feed, its licence, whether it answered, and what isn't connected yet
 
 ## Database
@@ -61,6 +63,8 @@ One module per source in `lib/sources`, all returning the shapes in `lib/sources
 | `states/nt.ts` | NT tenders site export of awarded contracts (xlsx), listed on data.nt.gov.au | state contracts, last 12 months |
 | `states/tas.ts` | Tasmanian tenders site, awarded list plus one page per contract (HTML) | state contracts, rolling 30 days |
 | `states/act.ts` | ACT Notifiable Invoices Register on data.act.gov.au (Socrata API, CC BY 4.0) | invoices of $25,000 and over, last 12 months |
+| `finance-sales.ts` | Department of Finance "Past sales" page (HTML, CC BY 4.0) | every Commonwealth business sold since 1988: month, proceeds, trade sale or share offer |
+| `tvfy.ts` | They Vote For You API (OpenAustralia Foundation, CC BY-SA; built from Hansard, not a government publisher) | current MPs and senators, divisions attended, rebellions. Needs `TVFY_API_KEY` |
 | `states/wa.ts` | Tenders WA award CSV on data.wa.gov.au (CC BY 4.0) | state contracts, latest released financial year |
 | `crime.ts` | ABS Recorded Crime – Victims and Offenders publication spreadsheets, found from each release page (CC BY 4.0) | victims by offence, year and state with rates; offenders by principal offence, year and state with rates |
 | `homelessness.ts` | AIHW Specialist Homelessness Services tables, found through the report's download API, and the ABS Estimating Homelessness Census table (both CC BY 4.0) | service clients per year and per 10,000 by state, reasons for seeking help; Census homeless count and rate by living situation and state |

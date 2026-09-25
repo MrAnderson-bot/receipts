@@ -13,6 +13,8 @@ import { tryGetMigration } from "@/lib/sources/migration";
 import { tryGetCrime } from "@/lib/sources/crime";
 import { tryGetHomelessness } from "@/lib/sources/homelessness";
 import { tryGetFuel, FUEL_CODES, keyNeeded, NOT_CONNECTED as FUEL_NOT_CONNECTED } from "@/lib/sources/fuel";
+import { tryGetAssetSales } from "@/lib/sources/finance-sales";
+import { tryGetParliament, NO_KEY } from "@/lib/sources/tvfy";
 import { getStore, type DbStats } from "@/lib/db";
 import { num } from "@/lib/format";
 
@@ -38,9 +40,10 @@ const NOT_CONNECTED = [
 ];
 
 export default async function Page() {
-  const [indicators, spending, grants, revenue, levels, budget, companies, migration, crime, homelessness, ...states] = await Promise.all([
+  const [indicators, spending, grants, revenue, levels, budget, companies, migration, crime, homelessness, sales, parliament, ...states] = await Promise.all([
     getIndicators(), tryGetSummary(7), tryGetGrants(7), tryGetRevenue(), tryGetTaxByLevel(),
-    tryGetBudget(), tryGetTransparency(), tryGetMigration(), tryGetCrime(), tryGetHomelessness(), ...STATE_CODES.map((c) => tryGetState(c)),
+    tryGetBudget(), tryGetTransparency(), tryGetMigration(), tryGetCrime(), tryGetHomelessness(), tryGetAssetSales(), tryGetParliament(),
+    ...STATE_CODES.map((c) => tryGetState(c)),
   ]);
   const fuel = await Promise.all(FUEL_CODES.map((c) => tryGetFuel(c)));
   const okIds = new Set(indicators.filter((r) => r.series).map((r) => r.id));
@@ -160,6 +163,24 @@ export default async function Page() {
       licence: "CC BY 4.0",
       ok: !!homelessness.census.data,
       status: homelessness.census.data ? `Census ${homelessness.census.data.years[homelessness.census.data.years.length - 1]}; the 2026 Census figures are expected in 2028` : `Not answering. ${homelessness.census.error}`,
+    },
+    {
+      name: "Department of Finance, past sales of government businesses",
+      url: sales.data?.sourceUrl ?? "https://www.finance.gov.au/government/government-business-enterprises/past-sales",
+      gives: "every trade sale and public share offer managed by the Commonwealth since 1988, with month and proceeds",
+      licence: "CC BY 4.0",
+      ok: !!sales.data,
+      status: sales.data ? `${num(sales.data.sales.length)} sales read from the page` : `Not answering. ${sales.error}`,
+    },
+    {
+      name: "They Vote For You (OpenAustralia Foundation), API",
+      url: "https://theyvoteforyou.org.au/help/data",
+      gives: "every MP’s and senator’s divisions attended and votes against their party. Not a government publisher: built from Hansard, the parliament’s own record, by a charity",
+      licence: "CC BY-SA, attribution to They Vote For You",
+      ok: !!parliament.data,
+      status: parliament.data
+        ? `${num(parliament.data.members.length)} members`
+        : parliament.error === NO_KEY ? "Not connected: needs a free API key (TVFY_API_KEY)" : `Not answering. ${parliament.error}`,
     },
     ...states.map((s, i) => ({
       name: s.data ? `${s.data.name}: ${s.data.sourceName}` : `${STATE_CODES[i]} contracts`,

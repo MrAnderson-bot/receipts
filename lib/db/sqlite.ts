@@ -5,7 +5,7 @@ import path from "path";
 import type { Series } from "../sources/types";
 import { noticePageId, type Contract, type Notice } from "../sources/austender";
 import type { FuelPrice } from "../sources/fuel/types";
-import type { CompanyRow, Contradiction, DbStats, RunResult, Store } from "./types";
+import type { CompanyRow, Contradiction, DbStats, Revision, RunResult, Store } from "./types";
 
 const FILE = path.join(process.cwd(), "data", "receipts.db");
 
@@ -113,6 +113,26 @@ export const sqliteStore: Store = {
     // For each period, the value most recently seen is the current one; earlier rows are superseded revisions.
     return open().prepare(`SELECT period, value, first_seen AS firstSeen, last_seen AS lastSeen FROM observations
       WHERE series_id = ? ORDER BY period, last_seen`).all(seriesId);
+  },
+
+  async revisions(): Promise<Revision[]> {
+    // The row seen first is what the publisher said originally; the row seen last is what they say now.
+    return open().prepare(`SELECT o.series_id AS seriesId, s.label, s.unit, s.source, o.period,
+        f.value AS firstValue, f.first_seen AS firstSeen, l.value AS latestValue, l.last_seen AS latestSeen
+      FROM (SELECT series_id, period FROM observations GROUP BY series_id, period HAVING COUNT(*) > 1) o
+      JOIN series s ON s.id = o.series_id
+      JOIN observations f ON f.series_id = o.series_id AND f.period = o.period
+        AND f.first_seen = (SELECT MIN(first_seen) FROM observations WHERE series_id = o.series_id AND period = o.period)
+      JOIN observations l ON l.series_id = o.series_id AND l.period = o.period
+        AND l.last_seen = (SELECT MAX(last_seen) FROM observations WHERE series_id = o.series_id AND period = o.period)
+      WHERE f.value <> l.value
+      ORDER BY s.source, s.label, o.period`).all();
+  },
+
+  async contractsById(ids) {
+    if (ids.length === 0) return [];
+    const marks = ids.map(() => "?").join(",");
+    return open().prepare(`SELECT id, agency, supplier, value, description, published FROM contracts WHERE id IN (${marks})`).all(...ids);
   },
 
   async saveSnapshot(source, key, payload) {

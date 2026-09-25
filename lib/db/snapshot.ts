@@ -14,6 +14,7 @@ import { tryGetFuel, FUEL_CODES } from "../sources/fuel";
 import { tryGetMigration } from "../sources/migration";
 import { tryGetCrime } from "../sources/crime";
 import { tryGetHomelessness } from "../sources/homelessness";
+import { tryGetAssetSales } from "../sources/finance-sales";
 import type { Series } from "../sources/types";
 import type { YearValue } from "../sources/treasury";
 
@@ -71,6 +72,13 @@ export async function runSnapshot(): Promise<RunResult[]> {
     // Estimates change with every Budget, so they are kept whole in the snapshot, dated by when they were read.
     await store.saveSnapshot("budget", d.budgetYear, d);
     return `6 series, ${d.budgetYear} Budget`;
+  });
+
+  await step("asset-sales", async () => {
+    const d = need(await tryGetAssetSales());
+    // The list only ever grows, but a sale's stated proceeds can be corrected, so the whole list is kept per day.
+    await store.saveSnapshot("asset-sales", "all", d);
+    return `${d.sales.length} sales`;
   });
 
   await step("tax-by-level", async () => {
