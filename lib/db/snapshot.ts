@@ -11,6 +11,8 @@ import { tryGetTransparency, loadAllEntities } from "../sources/ato-transparency
 import { tryGetProfits } from "../sources/abs-profits";
 import { tryGetState, STATE_CODES } from "../sources/states";
 import { tryGetMigration } from "../sources/migration";
+import { tryGetCrime } from "../sources/crime";
+import { tryGetHomelessness } from "../sources/homelessness";
 import type { Series } from "../sources/types";
 import type { YearValue } from "../sources/treasury";
 
@@ -141,6 +143,23 @@ export async function runSnapshot(): Promise<RunResult[]> {
       for (const s of series) await store.saveSeries(s);
       await store.saveSnapshot(`migration:${name}`, key, d);
       return `${series.length} series, ${key}`;
+    });
+  }
+
+  // Crime and homelessness: every series stored, plus the whole table set as a dated snapshot.
+  const [crime, homelessness] = await Promise.all([tryGetCrime(), tryGetHomelessness()]);
+  const yearlyParts: [string, { data: any; error: string | null }, (d: any) => string][] = [
+    ["crime:victims", crime.victims, (d) => d.edition],
+    ["crime:offenders", crime.offenders, (d) => d.edition],
+    ["homelessness:shs", homelessness.shs, (d) => d.latestYear],
+    ["homelessness:census", homelessness.census, (d) => d.years[d.years.length - 1]],
+  ];
+  for (const [name, part, keyOf] of yearlyParts) {
+    await step(name, async () => {
+      const d = need(part);
+      for (const s of d.series as Series[]) await store.saveSeries(s);
+      await store.saveSnapshot(name, keyOf(d), d);
+      return `${d.series.length} series, ${keyOf(d)}`;
     });
   }
 
