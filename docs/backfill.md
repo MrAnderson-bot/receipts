@@ -197,3 +197,14 @@ Record here, with the date, when each unit family starts and finishes, and any c
   notices, 47,633 amendments across 22,331 contracts). The database grew from 138 MB to 725 MB, about twice the plan's
   estimate per year, because each amendment repeats the whole release JSON. Decide before the next year whether to keep
   the `release` JSON column (every field already has its own column) or budget the disk for it.
+- 28 September 2026: the VM's loop had been stuck on `contracts:FY2022-23` since 25 September, retrying the week of
+  22 to 29 April 2023 every 17 minutes (245 failed passes, about 500 API calls each). Cause, now known: **AusTender
+  re-stamped every record's last-modified date onto 27 and 28 April 2023.** `contractLastModified` returns "No
+  Records" (HTTP 400, errorCode 100) for any window before then, and those two days hold every notice that existed,
+  far past the 500-page cap. Fixes: an empty window is read as empty, not a failure; a window over the cap is split
+  in half down to six hours and, if still over, recorded in the progress row's error field and skipped rather than
+  retried; and windows ending on or before 29 April 2023 are read from `contractPublished` (`releaseKindFor` in
+  `lib/sources/austender.ts`). So FY2023-24 onward carry every amendment; FY2022-23 and earlier carry originals, plus
+  whatever amendments the published endpoint files under their own date. Amendments made before April 2023 exist
+  only inside the bulk window: reading it once (hundreds of thousands of releases, an hour or two, roughly 1 GB) is
+  a possible later unit, not a nightly one.

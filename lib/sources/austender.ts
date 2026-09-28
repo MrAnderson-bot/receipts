@@ -451,6 +451,14 @@ export async function getSummary(days: number): Promise<Summary> {
 
 export type ReleaseKind = "contractPublished" | "contractLastModified";
 
+// AusTender re-stamped every record's last-modified date onto 27 and 28 April 2023 (a platform change:
+// `contractLastModified` returns "No Records" for any window before then, and those two days hold every
+// notice that existed at the time, hundreds of thousands of releases). So the modified endpoint only carries
+// information from this date on; before it, walk `contractPublished`, which has originals back to 2013.
+// Amendments made before April 2023 exist only inside that bulk window.
+export const LAST_MODIFIED_FROM = new Date("2023-04-29T00:00:00Z");
+export const releaseKindFor = (windowEnd: Date): ReleaseKind => (windowEnd.getTime() <= LAST_MODIFIED_FROM.getTime() ? "contractPublished" : "contractLastModified");
+
 export type Release = {
   releaseId: string; cnId: string; ocid: string; releaseDate: string; tag: string; // tags joined with ","
   initiationType: string | null; language: string | null;
@@ -525,6 +533,11 @@ export async function fetchReleases(
   while (url) {
     if (pages >= maxPages) throw new Error(`AusTender window ${iso(from)} to ${iso(to)} has more than ${maxPages} pages; use a smaller window`);
     const res: Response = await fetch(url, { cache: "no-store", headers: { "User-Agent": USER_AGENT } });
+    // The API answers an empty window with HTTP 400 and errorCode 100, "No Records found". That is an answer, not a failure.
+    if (res.status === 400) {
+      const body: any = await res.json().catch(() => null);
+      if (body?.errorCode === 100 || /no records/i.test(body?.message ?? "")) return { releases, pages: pages + 1 };
+    }
     if (!res.ok) throw new Error(`AusTender returned ${res.status} for ${url}`);
     const json: any = await res.json();
     releases.push(...(json.releases ?? []));
@@ -534,4 +547,28 @@ export async function fetchReleases(
     if (url && pauseMs) await new Promise((r) => setTimeout(r, pauseMs));
   }
   return { releases, pages };
+}
+
+export class WindowTooLarge extends Error {}
+const MIN_SPLIT_MS = 6 * 3_600_000;
+
+// fetchReleases, but a window with more pages than allowed is split in half and each half read, down to six
+// hours. A six-hour window still over the cap is a bulk event (like the April 2023 re-stamp) and is reported as
+// WindowTooLarge so the caller can record it and move on instead of retrying forever.
+export async function fetchReleasesSplitting(
+  kind: ReleaseKind, from: Date, to: Date,
+  opts: { pauseMs?: number; maxPages?: number; onSplit?: (from: Date, to: Date) => void } = {},
+): Promise<{ releases: any[]; pages: number; splits: number }> {
+  try {
+    const r = await fetchReleases(kind, from, to, opts);
+    return { ...r, splits: 0 };
+  } catch (e) {
+    if (!(e instanceof Error) || !/more than \d+ pages/.test(e.message)) throw e;
+    if (to.getTime() - from.getTime() <= MIN_SPLIT_MS) throw new WindowTooLarge(`${kind} ${iso(from)} to ${iso(to)}: more than ${opts.maxPages ?? 500} pages in six hours; a bulk event, skipped`);
+    const mid = new Date(Math.floor((from.getTime() + to.getTime()) / 2));
+    opts.onSplit?.(from, to);
+    const a = await fetchReleasesSplitting(kind, from, mid, opts);
+    const b = await fetchReleasesSplitting(kind, mid, to, opts);
+    return { releases: [...a.releases, ...b.releases], pages: a.pages + b.pages, splits: a.splits + b.splits + 1 };
+  }
 }

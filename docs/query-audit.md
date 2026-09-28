@@ -30,6 +30,9 @@ so it does not fall inside the window of the day it was made. Measured for 22 Se
 So the "amendments" count on the Contracts page, and the `amended` list in the snapshot, see about one
 amendment in eighty. The 90-day summary's "counted but excluded" figure is wrong by that much.
 
+**Caveat found 28 September 2026:** `contractLastModified` holds nothing before 27 April 2023; AusTender re-stamped every
+record's last-modified date onto 27 and 28 April 2023, so for earlier history walk `contractPublished` (see `docs/backfill.md`).
+
 `contractLastModified` returns the amendment release **and** the original release it modifies (84 originals
 came back alongside on that day), so it is also a free way to get a notice's full history. `findById/CN...`
 returns the same thing for one notice, and accepts the page's `CN1234-A1` form too.

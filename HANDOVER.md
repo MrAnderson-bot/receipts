@@ -294,6 +294,35 @@ both tested by script today, both free of logins and keys. Details, the API call
    dateType, dateStart, dateEnd, ValueFrom, ValueTo) did not return results to a plain GET; work out its parameters
    before relying on it.
 
+## For tomorrow: two "is spending too high" rules for the scorecard (written 25 September 2026)
+
+The owner asked whether spending that is unnecessary or too high can be measured. It can't be judged from the
+records, and the site must not pretend to; what can be measured is a line item against a fixed yardstick, the
+same way every other scorecard rule works. Two rules agreed in principle, data already stored, tone neutral
+(no side, no adjectives), to go in a new group, working name "Restraint":
+
+1. **Parliamentary travel not rising faster than prices.** From `ipea_expenses` (192,000 lines, quarterly,
+   parliamentarians and their staff). Travel-related = `high_level_category` in Employee Travel, Scheduled
+   Commercial Transport, Unscheduled Commercial Transport, Travel Allowance, Other Car Costs, International Travel,
+   Family or Nominee Travel. Rule: the latest four quarters against the four before, compared with CPI growth over
+   the same period. Readings on 25 September 2026: travel $60M in 2023-24, $61M in 2024-25, $68M in 2025-26
+   (about +11%, above CPI, so the rule is missed today); all expenses $170M, $175M, $175M (flat). The latest
+   quarter, April to June 2026, is the largest on record at $50M. Quarters are lumpy (sitting weeks, elections), so
+   always compare four quarters, never one. Store the quarterly totals as series (`ipea:travel`, `ipea:total`) in
+   the snapshot so the rule reads them like any other. IPEA does not cover public servants' travel; departments
+   disclose that only in Senate estimates answers, and there is no dataset. Say so on the page.
+2. **Total spending not above its long-run share of GDP.** Payments as a share of GDP (`budget-payments` and the
+   GDP series are stored; the Budget tables also give the share directly) against the 30-year average. The
+   scorecard already has real payments growth against the 2% ceiling and the tax take; this is the level test that
+   goes with them. Yardstick basis: no government has published a spending ceiling since 2022.
+
+Also measurable later, each with a source, if wanted: contract value added by amendment per agency and category
+(from `contract_releases`, now stored); limited tender under a stated exemption versus none (exemption codes now
+stored); non-competitive and ad hoc grants share (already in the grants summary); campaign advertising from
+Finance's annual report; and consultancy and contractor spend against APS headcount from the Transparency Portal
+and the APSC, where the government's own 2023 commissioning framework gives a published basis. Present any of
+these as line items against a yardstick, never as a verdict on necessity.
+
 ## What to do next, in order
 
 1. ~~Put it in git~~ Done: https://github.com/MrAnderson-bot/receipts, AGPLv3.

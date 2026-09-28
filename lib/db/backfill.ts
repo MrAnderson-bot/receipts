@@ -18,7 +18,7 @@
 // the Next-cached one: unstable_cache only works inside a Next process.
 import { getStore } from "./index";
 import type { BackfillProgress } from "./types";
-import { fetchReleases, toReleases, type Release } from "../sources/austender";
+import { fetchReleasesSplitting, releaseKindFor, LAST_MODIFIED_FROM, WindowTooLarge, toReleases, type Release } from "../sources/austender";
 import { toContracts } from "../sources/austender";
 import { loadGrantRows } from "../sources/grantconnect";
 import { ABS_SERIES, fetchAbs } from "../sources/abs";
@@ -92,8 +92,19 @@ async function contractsUnit(unit: string, opts: BackfillOptions): Promise<Backf
   try {
     while (end.getTime() > from.getTime()) {
       if (Date.now() > deadline) { log(`${unit}: time budget reached at ${end.toISOString().slice(0, 10)}; resume later`); break; }
-      const start = new Date(Math.max(from.getTime(), end.getTime() - WINDOW_DAYS * DAY));
-      const { releases, pages } = await fetchReleases("contractLastModified", start, end);
+      let start = new Date(Math.max(from.getTime(), end.getTime() - WINDOW_DAYS * DAY));
+      // Never let a window straddle the April 2023 re-stamp: modified-date on one side, publish-date on the other.
+      if (start.getTime() < LAST_MODIFIED_FROM.getTime() && end.getTime() > LAST_MODIFIED_FROM.getTime()) start = LAST_MODIFIED_FROM;
+      const kind = releaseKindFor(end);
+      let releases: any[] = [], pages = 0, splits = 0;
+      try {
+        ({ releases, pages, splits } = await fetchReleasesSplitting(kind, start, end, { onSplit: (a, b) => log(`${unit}: ${a.toISOString().slice(0, 13)} to ${b.toISOString().slice(0, 13)} too large, splitting`) }));
+      } catch (e) {
+        if (!(e instanceof WindowTooLarge)) throw e;
+        // Recorded, not retried: the window is skipped and the unit carries on. The note stays in the progress row.
+        p.error = [p.error, e.message].filter(Boolean).join("; ").slice(-2000);
+        log(`${unit}: ${e.message}`);
+      }
       p.calls += pages;
       const rows: Release[] = releases.flatMap(toReleases);
       // The same release can come back on two pages of one window; keep one copy.
@@ -105,7 +116,7 @@ async function contractsUnit(unit: string, opts: BackfillOptions): Promise<Backf
       p.rowsAdded += added;
       p.cursor = start.toISOString();
       await store.saveBackfillProgress(p);
-      log(`${unit}: ${start.toISOString().slice(0, 10)} to ${end.toISOString().slice(0, 10)}: ${unique.length} releases (${added} new), ${contracts.length} originals (${newContracts} new), ${pages} pages`);
+      log(`${unit}: ${start.toISOString().slice(0, 10)} to ${end.toISOString().slice(0, 10)} (${kind === "contractPublished" ? "published" : "modified"}): ${unique.length} releases (${added} new), ${contracts.length} originals (${newContracts} new), ${pages} pages${splits ? `, ${splits} splits` : ""}`);
       end = start;
     }
   } catch (e) { await fail(p, e); }
