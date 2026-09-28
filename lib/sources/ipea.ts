@@ -81,10 +81,28 @@ export type ExpenseSummary = {
   columns: readonly string[];
 };
 
-// IPEA's own report page for one person in one quarter, e.g.
-// https://www.ipea.gov.au/pwe/full-report/Leigh/Andrew/Parliamentarian/2020-07-01
-export const reportUrl = (surname: string, firstName: string, role: string, start: string) =>
-  `https://www.ipea.gov.au/pwe/full-report/${[surname, firstName, role, start].map((s) => encodeURIComponent(s)).join("/")}`;
+// IPEA's own page for one person in one quarter. The site was rebuilt in 2025: a page is now the person's
+// titled name and role as a slug, with the quarter as a numeric id, e.g.
+// https://www.ipea.gov.au/hon-anthony-albanese-mp-parliamentarian?period=63 (Apr-Jun 2026). The slug drops the word
+// "the" wherever it falls and keeps every other word ("senator-hon-penny-wong-parliamentarian"). The period ids were read
+// off a person page on 28 September 2026; 55 is unused on the site, so later quarters count on from 63 and
+// earlier ones are looked up. An unknown quarter is left off, and the page then shows its latest.
+const PERIOD_IDS: Record<string, number> = {
+  "2022Q03": 47, "2022Q04": 48, "2023Q01": 49, "2023Q02": 50, "2023Q03": 51, "2023Q04": 52, "2024Q01": 53, "2024Q02": 54,
+  "2024Q03": 56, "2024Q04": 57, "2025Q01": 58, "2025Q02": 59, "2025Q03": 60, "2025Q04": 61, "2026Q01": 62, "2026Q02": 63,
+};
+const periodId = (reportingPeriodId: string): number | null => {
+  if (PERIOD_IDS[reportingPeriodId]) return PERIOD_IDS[reportingPeriodId];
+  const m = reportingPeriodId.match(/^(\d{4})Q0?([1-4])$/);
+  if (!m) return null;
+  const quartersAfter = (Number(m[1]) - 2026) * 4 + (Number(m[2]) - 2);
+  return quartersAfter > 0 ? 63 + quartersAfter : null;
+};
+const slug = (s: string) => s.toLowerCase().replace(/\bthe\b/g, " ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+export const reportUrl = (fullNameWithTitle: string, role: string, reportingPeriodId: string) => {
+  const id = periodId(reportingPeriodId);
+  return `https://www.ipea.gov.au/${slug(fullNameWithTitle)}-${slug(role)}${id ? `?period=${id}` : ""}`;
+};
 
 // Every quarterly extract IPEA has put on data.gov.au, newest first.
 export async function listQuarters(): Promise<Quarter[]> {
@@ -187,7 +205,7 @@ export function summarise(loaded: { quarter: Quarter; rows: ExpenseRow[] }[]): E
     const p = people.get(key) ?? {
       name: r.FullNameWithTitle, surname: r.Surname, firstName: r.FirstName, role: r.Role, party: r.Party,
       state: r.StateOrTerritory, electorate: r.Electorate, total: 0, count: 0, categories: [], cats: new Map(),
-      reportUrl: reportUrl(r.Surname, r.FirstName, r.Role, r.ReportingPeriodStartDate),
+      reportUrl: reportUrl(r.FullNameWithTitle, r.Role, r.ReportingPeriodId),
     };
     p.total += r.amount;
     p.count++;
@@ -208,7 +226,7 @@ export function summarise(loaded: { quarter: Quarter; rows: ExpenseRow[] }[]): E
     .map((r) => ({
       uniqueId: r.UniqueId, name: r.FullNameWithTitle, party: r.Party, category: r.HighLevelCategory, subCategory: r.MajorSubCategory,
       description: r.Description, fromDate: r.FromDate, toDate: r.ToDate, fromLocation: r.FromLocation, toLocation: r.ToLocation,
-      nights: r.NumberNights, amount: r.amount, reportUrl: reportUrl(r.Surname, r.FirstName, r.Role, r.ReportingPeriodStartDate),
+      nights: r.NumberNights, amount: r.amount, reportUrl: reportUrl(r.FullNameWithTitle, r.Role, r.ReportingPeriodId),
       sourceUrl: r.sourceUrl,
     }));
 
