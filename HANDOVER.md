@@ -232,7 +232,42 @@ South Australia's contracts (same blocked system as Victoria). Earnings of ASX-l
 PDF announcements, commercial licensing). The Final Budget Outcome as its own document (PDF only; its figures
 arrive in the next Budget's tables). WA's newest open contract file is 2023-24. Tasmania only exposes 30 days.
 
+## Start here tomorrow (written 29 September 2026, evening)
+
+Everything below this list is detail; this is the order to work in.
+
+1. **Check last night's publish.** It failed on 28 September (disk full) and the disk was resized on 29 September, so the
+   29 September run at 04:32 Canberra time is the first with room. `.deployackfill-status.ps1` shows disk and
+   database; `gcloud compute ssh receipts-engine --zone australia-southeast1-b --tunnel-through-iap --command "sudo journalctl -u receipts-publish -n 20 --no-pager -o cat"`
+   shows the run. Then open the public site and check three new things rendered: the Budget page's "what the year
+   actually cost, against the plan" section (Final Budget Outcome), the Northern Territory on the fuel page (region
+   averages), and the Expenses page links to IPEA (they were 404 until 28 September). Also that `state_grants` is no
+   longer empty (it was 0 rows on the VM because the publish that fills it had failed).
+2. **Three housekeeping decisions on the VM**, none urgent, all noted in `docs/backfill.md`: delete the stale 1.7 GB
+   `data/receipts-backup.db` (the bucket holds the dated copies); set a 14-day lifecycle rule on the backup bucket now
+   that each nightly copy is 6.5 GB; decide whether to drop the `release` JSON column from `contract_releases` to
+   roughly halve the database (every field already has its own column; needs a VACUUM with free space equal to the file,
+   which the 30 GB disk now has).
+3. **Pick the next build** from the sections below, in this order of value: donations (one AEC download, every column,
+   an afternoon), the taxing Acts (one API walk), the two "spending too high" scorecard rules (data already stored),
+   bills (an id walk of about 2,600 pages), Victorian grant awards from annual reports (route proven, incomplete by
+   construction), the actual-expenditure sources (Finance monthly statements, Transparency Portal).
+4. **Owed from the AusTender audit**, still open: switch the live 90-day query to `contractLastModified` (the
+   Contracts page undercounts amendments about eighty to one), fix the notice-page parser's four missing labels and
+   re-read the 3,677 damaged pages, keep the ATM and SON GUIDs, read all 32 grant columns.
+5. **Loose ends**: the 2022-23 Final Budget Outcome file is not at the standard path (find it and add the year); the
+   Victorian fuel key is still pending with the scheme; the dev server must be started by hand when needed (it was
+   stopped twice by the machine running low on memory, and I no longer start it on my own).
+
 ## Done since 25 September (status on 29 September 2026)
+
+- **Backfill finished (29 September, 00:29 Canberra).** Every unit: contracts 2007-08 to 2025-26 (1,158,436 release
+  rows, 860,023 contracts), grants 2017-18 to 2025-26 (351,770), IPEA (605,918 lines), APS, companies, Budgets, GFS,
+  series depth. The database is 6.5 GB and passed a full `PRAGMA integrity_check` ("ok", 49 minutes on the VM).
+- **Disk resized 20 GB to 30 GB (29 September)** after the backfill filled it and the 28 September publish failed with
+  "database or disk is full". The build, npm and apt caches were deleted first (regenerated automatically), then
+  `gcloud compute disks resize`, `growpart` (from `cloud-guest-utils`, which the image lacked) and `resize2fs`.
+  13 GB free after.
 
 - **Backfill loop unstuck (28 September).** It had retried one week for three days. Cause: AusTender re-stamped every
   record's last-modified date onto 27 and 28 April 2023, so `contractLastModified` has nothing before then and those
