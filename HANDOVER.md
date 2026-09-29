@@ -232,6 +232,37 @@ South Australia's contracts (same blocked system as Victoria). Earnings of ASX-l
 PDF announcements, commercial licensing). The Final Budget Outcome as its own document (PDF only; its figures
 arrive in the next Budget's tables). WA's newest open contract file is 2023-24. Tasmania only exposes 30 days.
 
+## Done since 25 September (status on 29 September 2026)
+
+- **Backfill loop unstuck (28 September).** It had retried one week for three days. Cause: AusTender re-stamped every
+  record's last-modified date onto 27 and 28 April 2023, so `contractLastModified` has nothing before then and those
+  two days hold everything. Fix in `lib/sources/austender.ts` and `lib/db/backfill.ts`: empty windows read as empty,
+  oversized windows split or skipped with a note, windows before 29 April 2023 read from `contractPublished`. The VM
+  is on FY2022-23 and moving; 2023-24 to 2025-26 done (about 350,000 release rows). Details in `docs/backfill.md`.
+- **Expenses page links fixed (28 September).** IPEA rebuilt its site; links are now name-slug pages with a period id
+  (`lib/sources/ipea.ts`, `reportUrl`). Live at the next publish.
+- **Fuel keys: Queensland and South Australia live (28 September).** Both in `.env.local` and on the VM under the
+  loaders' names `FUEL_QLD_KEY` and `FUEL_SA_KEY` (the owner's own names `QLD_FUEL_API`, `SA_FUEL_API` are kept
+  alongside). Keys checked with one raw call each. Victoria still pending.
+- **Scorecard: Response group (25 September).** Five rules on whether planned spending grows at least as fast as the
+  pressure it answers; 4 of 5 met on the first reading (`docs/kpi-scorecard.md`).
+- **Public repository history rewritten (25 September).** The owner's email and cloud resource names were removed from
+  every commit and the force-push done; the VM's clone was repointed on 28 September. Never put account names or
+  resource ids in tracked files again; they live in the git-ignored `docs/HANDOVER-launch.md`.
+- **Actual expenditure sources tested** (`docs/actual-expenditure-sources.md`): Finance monthly statements and the
+  Transparency Portal data API. Not built yet.
+- **"Connect all this" pass over the not-connected list (29 September).** Every entry re-tested with a browser-style
+  request. Two connected: the **Final Budget Outcome** (`lib/sources/fbo.ts`: Treasury's Part 1 Word file parses
+  cleanly; expenses by function, receipts by head and net capital investment, estimate beside outcome, 2019-20
+  onward; a section on the Budget page, an `fbo` snapshot step, series `fbo-fn:*` and `fbo-receipt:*`) and
+  **NT fuel** (`lib/sources/fuel/nt.ts`: MyFuel NT's public JSON endpoint gives average prices per region, so the
+  Territory is a seventh fuel state at region level, no station rows). The rest stay off, each for a reason that
+  doesn't change: South Australia (contracts and every grants site), Tasmania and the NT grants directory sit
+  behind a real Cloudflare "Just a moment" challenge, which is a bot check this project will not automate past;
+  ASX earnings are licensed; Victorian, WA, ACT and NT grant awards have no register (WA's data catalogue has 326
+  "grants" datasets, none a list of recipients); the ACT has no fuel scheme. If a browser ever has to be involved
+  for a snapshot (SA contracts, like Victoria's), that is a hand step, not a nightly job.
+
 ## For tomorrow: three kinds of history the backfill can't fetch yet (written 25 September 2026)
 
 The backfill loop on the VM now fetches old records for seven kinds of data (see `lib/scorecard.ts` note above and
@@ -323,6 +354,63 @@ Finance's annual report; and consultancy and contractor spend against APS headco
 and the APSC, where the government's own 2023 commissioning framework gives a published basis. Present any of
 these as line items against a yardstick, never as a verdict on necessity.
 
+## For tomorrow: three new feeds, decided and sourced (written 29 September 2026)
+
+The owner asked for bills, political donations and a list of taxes. Each was probed by script on 28 and 29
+September 2026 and the owner chose the reading below. Nothing is built yet; every source below is public, keyless,
+and returns to a plain request (Parliament's sites need a browser-style user agent: the project's `USER_AGENT`
+gets HTTP 403, a Chrome-style string gets 200). Per the project rule, each gets a per-record table with every field.
+
+1. **Bills: every bill since 2013 with its fate.** Two sources that join:
+   - **ParlInfo bill home pages**, `https://parlinfo.aph.gov.au/parlInfo/search/display/display.w3p;query=Id%3A%22legislation%2Fbillhome%2Fr7473%22`,
+     one per bill, ids `rNNNN` in introduction order (r7548 was the newest on 28 September 2026). The page text has,
+     in order: title; Type (Government or Private); Originating house; Status (Act, Before Senate, Lapsed, Negatived
+     ...); Portfolio (or Sponsor for a private bill); Summary; then "Progress of bill" with a dated stage list per
+     house (Introduced and read a first time, Second reading moved, Second reading debate, Second reading agreed to,
+     Third reading agreed to), "Finally passed both Houses", "Assent", "Act no:" and "Year:". Dates are dd/mm/yy.
+     Parse it the way `parseNotice` parses AusTender pages: strip tags, walk labels. The RSS feeds
+     (`/parlInfo/feeds/rss.w3p;query=Dataset:billsCurBef` and `billsCurNotBef`, `;resCount=100`) list current-
+     parliament bills but cap at 500 items and give only title, link and date, so use them for "new bills today" and
+     walk the ids for history. **Still to find:** the id where 2013 starts (probe r4900 to r5500 and read the year in
+     the title); the id walk is about 2,600 pages at a polite pace, an hour or so, a backfill unit like the notices.
+   - **Federal Register of Legislation API** (OData, no key): `https://api.prod.legislation.gov.au/v1/titles` with
+     `$filter`, `$count=true`, `$top`/`$skip`, `$apply=groupby(...)`. 13,741 Acts. Each title carries id
+     (`C2026A00024`), name, makingDate, status (InForce, Repealed ...), isPrincipal, year, number, statusHistory,
+     nameHistory and `originatingBillUri`, the ParlInfo bill page it came from. That is the join from a bill to the
+     Act it became. `$expand=*` errors; select fields explicitly. Entity sets also include Departments, Versions,
+     Affect (which Acts amend which).
+   - Table `bills` keyed by ParlInfo id: every field above plus the Act id when the register has it. Page: counts by
+     year, portfolio and type; time from introduction to assent; private members' bills and how many became law;
+     bills before Parliament now. Nav: under Parliament as `/bills`.
+2. **Political donations: who gave what to whom, by year.** AEC Transparency Register export,
+   `https://transparency.aec.gov.au/Download/AllAnnualData`, a 2.6 MB zip of 13 CSVs, no login, plus
+   `AllElectionsData` and `AllReferendumData` for later. Files and columns (financial years 1998-99 to 2024-25;
+   the year label changes format, "1998-1999" then "2011-12", so normalise):
+   - Donations Made (66,278 rows): Financial Year, Donor Name, Donation Made To, Date, Value. Donor-declared.
+   - Detailed Receipts (124,288 rows): Financial Year, Return Type (Political Party, Associated Entity, Significant
+     Third Party, Political Campaigner, Member of HOR), Recipient Name, Received From, Receipt Type (Donation Received,
+     Other Receipt, Subscription, Public Funding, Unspecified), Value. Recipient-declared. 2024-25 "Donation Received"
+     rows: 2,559, $165M.
+   - Party Returns (2,229): Financial Year, Name, Party Group, Total Receipts, Total Payments, Total Debts, Total
+     Discretionary Benefits. Also Donor Returns, Associated Entity Returns, Significant Third Party Returns (with ABN
+     and ACN), Third Party Returns, Detailed Debts, Discretionary Benefits, Capital Contributions, MP returns.
+   - Tables: one per CSV, every column, keyed by file, year and row number, replaced whole on each download (the
+     export is the whole register; returns are amended). First page: donors to each party by year from both sides
+     (what donors declared giving, what parties declared receiving; they differ, say so), largest donors, party
+     totals. State the disclosure threshold on the page: gifts under it are not in the data. Nav: under Parliament
+     as `/donations`. Owner declined the name-match to suppliers for now; AEC gives ABNs only for third parties.
+3. **The list of taxes: every Act that imposes a tax, from the Register of Legislation.** The API has no subject
+   field, so the list is a name rule, printed on the page: in-force Acts whose name contains Tax, Excise, Levy,
+   Customs Tariff, Duty, Charge or Imposition (counts on 28 September 2026: Tax 484, Excise 98, Levy 169, Customs 212,
+   Charge 183, Imposition 97, Duty 6; overlapping). Refine by hand once listed: the constitutional test (s 55) is that
+   an Act imposing taxation deals only with imposition, which is why so many are "... Imposition Act"; amending and
+   assessment Acts should be shown apart from imposing Acts. Table `taxing_acts` with every API field plus the rule
+   that selected it; page: the list by kind, year made, in force or repealed, with the count over time. Nav: under
+   Money as `/taxes`. Later, join to Budget Paper 1 revenue heads for the dollars each raises.
+
+Order: donations first (one download, every column, one afternoon), then the taxing Acts (one API walk), then bills
+(the id walk is the long part). Add each to `/sources` and to the snapshot, and log the start in `docs/backfill.md`.
+
 ## What to do next, in order
 
 1. ~~Put it in git~~ Done: https://github.com/MrAnderson-bot/receipts, AGPLv3.
@@ -331,9 +419,9 @@ these as line items against a yardstick, never as a verdict on necessity.
    `/etc/receipts.env` on the VM, then `sudo systemctl start receipts-publish.service` and check the log. Until
    then, `npm run snapshot` on the dev machine keeps history accumulating.
    **Fuel API keys to register**, also for `/etc/receipts.env`, each on the personal account, never a company one.
-   Status 25 September 2026: NSW/TAS key in place and working. Victoria, South Australia and the Queensland live
-   feed are applied for; each scheme approves by hand and emails the key, so the owner is waiting on them. Nothing
-   to do in code until a key arrives: the loaders and page text are ready, and each state says "waiting on a key".
+   Status 28 September 2026: NSW/TAS, Queensland live feed and South Australia keys in place and on the VM. Victoria
+   is still applied for; the scheme approves by hand and emails the key. Nothing to do in code until it arrives: the
+   loader and page text are ready, and Victoria says "waiting on a key".
    Every keyed scheme is read at most three times a day (eight-hour cache, and a failure waits eight hours too).
    The pages cache only the state summaries; the station rows are over Next's 2 MB cache limit, so the snapshot
    step loads each feed once more, uncached, and stores the rows itself (the same pattern as `loadAps`):
@@ -376,7 +464,7 @@ these as line items against a yardstick, never as a verdict on necessity.
    tender figures as daily series so the two procurement rules can switch from fixed thresholds to "no worse than
    a year earlier" in September 2027; then emissions against the 43% target (DCCEEW), R&D share of GDP, SME share
    of contracts (Finance's yearly procurement statistics), bulk-billing, and state budgets (ABS GFS).
-6. **More sources**: ASIC insolvencies, ABS Government Finance Statistics for state budgets and debt, AEC political
+6. **More sources**: ASIC insolvencies, ABS Government Finance Statistics for state budgets and debt, AEC political (now planned above, 29 September)
    donations (joinable to contracts by name), DSS payment recipients, net overseas migration.
 7. ~~**They Vote For You**~~ Done 25 September 2026: `lib/sources/tvfy.ts` and `/parliament`, labelled third-party on
    `/sources`. Still to do: put the key on the VM as `TVFY_API_KEY` in `/etc/receipts.env` (the site builds without it

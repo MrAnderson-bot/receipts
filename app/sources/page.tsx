@@ -7,6 +7,7 @@ import { tryGetGrants } from "@/lib/sources/grantconnect";
 import { tryGetRevenue } from "@/lib/sources/treasury";
 import { tryGetTaxByLevel } from "@/lib/sources/abs-tax";
 import { tryGetBudget } from "@/lib/sources/budget";
+import { tryGetFbo } from "@/lib/sources/fbo";
 import { tryGetTransparency } from "@/lib/sources/ato-transparency";
 import { tryGetState, STATE_CODES, NOT_CONNECTED as STATES_NOT_CONNECTED } from "@/lib/sources/states";
 import { tryGetStateGrants, STATE_GRANT_CODES, NOT_CONNECTED as STATE_GRANTS_NOT_CONNECTED } from "@/lib/sources/state-grants";
@@ -29,11 +30,6 @@ type Row = { name: string; url: string; gives: string; licence: string; ok: bool
 // Feeds that are wanted but can't be pulled automatically yet, and why.
 const NOT_CONNECTED = [
   {
-    name: "Final Budget Outcome for the latest year, as its own document (Treasury)",
-    url: "https://budget.gov.au/content/fbo/index.htm",
-    why: "Published only as PDF and Word. Its headline figures do reach this site, because the next Budget’s historical tables carry them as final outcomes.",
-  },
-  {
     name: "Earnings of ASX-listed companies",
     url: "https://www.asx.com.au/markets/trade-our-cash-market/announcements",
     why: "Listed companies report earnings as PDF announcements. There is no open dataset, the ASX’s own data is licensed commercially, and the free feeds people use are unofficial and barred from republication. The Tax Office’s transparency list on the companies page is the open alternative.",
@@ -44,6 +40,7 @@ const NOT_CONNECTED = [
 ];
 
 export default async function Page() {
+  const fbo = await tryGetFbo();
   const [indicators, spending, grants, revenue, levels, budget, companies, migration, crime, homelessness, sales, parliament, aps, ...states] = await Promise.all([
     getIndicators(), tryGetSummary(7), tryGetGrants(7), tryGetRevenue(), tryGetTaxByLevel(),
     tryGetBudget(), tryGetTransparency(), tryGetMigration(), tryGetCrime(), tryGetHomelessness(), tryGetAssetSales(), tryGetParliament(), tryGetAps(),
@@ -114,6 +111,14 @@ export default async function Page() {
       licence: "CC BY 4.0",
       ok: !!levels.data,
       status: levels.data ? `Figures to ${levels.data.latest}` : `Not answering. ${levels.error}`,
+    },
+    {
+      name: "Treasury, Final Budget Outcome (Part 1, Word file)",
+      url: fbo.data?.latest.pageUrl ?? "https://archive.budget.gov.au/",
+      gives: "what each year actually cost and raised: expenses by function with sub-functions, cash receipts by head, net capital investment by function, each beside the Budget’s estimate; 2019-20 onward",
+      licence: "CC BY 4.0",
+      ok: !!fbo.data,
+      status: fbo.data ? `${fbo.data.years.length} years to ${fbo.data.latest.year}${fbo.data.missing.length ? `; not read: ${fbo.data.missing.map((m) => m.split(":")[0]).join(", ")}` : ""}` : `Not answering. ${fbo.error}`,
     },
     {
       name: "Department of Finance, Budget tables on data.gov.au",

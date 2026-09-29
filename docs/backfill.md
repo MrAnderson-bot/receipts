@@ -29,7 +29,7 @@ a few months of nights. Nothing here needs a bigger VM.
 |---|---|---|---|---|---|
 | **ABS and RBA series** (35 indicators) | from 2016 (mortgage rate 2019, AUD 2023) | ABS Data API back to the 1970s for most series (Labour Force from 1978-02); RBA CSVs back decades; AOFM from 2010 | one run: change each spec's `from` and re-fetch | 1 | one API call per series, seconds |
 | **Budget expenses by function and by program** | current Budget only (all estimates) | one data.gov.au dataset per Budget, 2014-15 to 2026-27 (13 Budgets), each with its expenses-by-function table and program expenses spreadsheet | one past Budget | 13 | one zip and one spreadsheet, a minute |
-| **Actual expenses by function** | none (Finance's table is estimates only) | ABS Government Finance Statistics (5512.0): Commonwealth expenses by purpose, actuals, annual since 1998-99, one spreadsheet | new source, one run, then yearly | 1 | one spreadsheet |
+| **Actual expenses by function** | 2019-20 onward from the Final Budget Outcome (`fbo.ts`, added 29 September 2026; 2022-23 missing) | ABS Government Finance Statistics (5512.0): Commonwealth expenses by purpose, actuals, annual since 1998-99, one spreadsheet | new source, one run, then yearly | 1 | one spreadsheet |
 | **Companies (ATO transparency)** | income year 2023-24 only (4,110 rows, plus 88 late) | one spreadsheet per income year, 2013-14 to 2023-24 | one income year | 10 | one spreadsheet, about 2,000 to 4,000 rows |
 | **Contracts (AusTender)** | notices published from 24 June 2026 (16,102 rows) | the API's `findByDates` accepts any window; notices exist from July 2007 (51 in that first month), roughly 80,000 a year now | one financial year, walked month by month, resumable | 19 (2007-08 to 2025-26) | about 800 API calls at 100 notices a page; 15 to 30 minutes at a polite rate; about 50 MB of rows |
 | Contract notice pages (the `n_*` fields) | 3,677 of 16,102 read | every notice has a public page | continues at the nightly `NOTICE_BUDGET` (1,500 a night) | ongoing | 1.5 million pages at the polite crawl rate is about three and a half days of continuous reading; see "Notice pages" below |
@@ -208,3 +208,11 @@ Record here, with the date, when each unit family starts and finishes, and any c
   whatever amendments the published endpoint files under their own date. Amendments made before April 2023 exist
   only inside the bulk window: reading it once (hundreds of thousands of releases, an hour or two, roughly 1 GB) is
   a possible later unit, not a nightly one.
+- 29 September 2026: **every unit done** (loop stopped itself at 00:29 Canberra time on 29 September): contracts
+  2007-08 to 2025-26 (1,158,436 release rows), grants 2017-18 to 2025-26, companies, Budgets, GFS, IPEA, APS, series
+  depth. The database is 6.5 GB and the 20 GB disk filled, so the 28 September publish failed ("database or disk is
+  full"). Fixed the same morning: build, npm and apt caches deleted (3.5 GB back) and the disk resized to 30 GB
+  (`gcloud compute disks resize`, then `growpart` from `cloud-guest-utils`, which the image lacked, and `resize2fs`);
+  13 GB free after. Still to decide: drop the `release` JSON column (every field has its own column; would roughly
+  halve the file, needs a VACUUM with free space equal to the database), delete the 1.7 GB local `receipts-backup.db`
+  from 25 September, and set the 14-day lifecycle rule on the backup bucket now that each nightly copy is 6.5 GB.

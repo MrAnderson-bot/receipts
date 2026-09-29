@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { tryGetBudget } from "@/lib/sources/budget";
 import { tryGetAssetSales } from "@/lib/sources/finance-sales";
+import { tryGetFbo } from "@/lib/sources/fbo";
 import { governmentLabel, GOVERNMENTS_SOURCE } from "@/lib/governments";
 import type { YearValue } from "@/lib/sources/treasury";
 import type { Series } from "@/lib/sources/types";
@@ -16,7 +17,8 @@ const at = (s: YearValue[], year: string) => s.find((p) => p.year === year)?.val
 const signedMoney = (n: number) => `${n < 0 ? "−" : ""}${money(Math.abs(n))}`;
 
 export default async function Page() {
-  const [{ data: b, error }, sales, ags] = await Promise.all([tryGetBudget(), tryGetAssetSales(), tryGetAgs()]);
+  const [{ data: b, error }, sales, ags, fbo] = await Promise.all([tryGetBudget(), tryGetAssetSales(), tryGetAgs(), tryGetFbo()]);
+  const outcome = fbo.data?.latest ?? null;
   const agsLatest = ags.data ? ags.data.points[ags.data.points.length - 1] : null;
   if (!b) {
     return (
@@ -93,6 +95,38 @@ export default async function Page() {
           ))}
         </ol>
         {src("Budget Paper No. 1 tables")}
+      </section>
+
+      <section id="outcome">
+        <h2>{outcome ? `What ${outcome.year} actually cost, against the plan` : "What the year actually cost, against the plan"}</h2>
+        {outcome ? (
+          <>
+            <p className="note">
+              Treasury’s Final Budget Outcome, by function: the Budget’s estimate for the year beside what was spent.
+              Total expenses {money((outcome.totals.expenses?.outcome ?? 0) * M)} against {money((outcome.totals.expenses?.estimate ?? 0) * M)} estimated;
+              receipts {money((outcome.totals.receipts?.outcome ?? 0) * M)} against {money((outcome.totals.receipts?.estimate ?? 0) * M)}.
+              A function’s sub-lines are summed where the table gives the function no figure of its own.
+            </p>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Function</th><th className="num">Estimate</th><th className="num">Outcome</th><th className="num">Difference</th></tr></thead>
+                <tbody>
+                  {outcome.functions.filter((l) => !l.group && !/^total /i.test(l.name) && l.outcome !== null).sort((a, b) => (b.outcome ?? 0) - (a.outcome ?? 0)).map((l) => (
+                    <tr key={l.name}>
+                      <td>{l.name}</td>
+                      <td className="num">{l.estimate === null ? "–" : money(l.estimate * M)}</td>
+                      <td className="num">{money((l.outcome ?? 0) * M)}</td>
+                      <td className="num">{l.estimate === null ? "–" : signedMoney(((l.outcome ?? 0) - l.estimate) * M)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="src"><a href={outcome.pageUrl} target="_blank" rel="noreferrer">Treasury, Final Budget Outcome {outcome.year}, Part 1, Table “expenses by function”</a></p>
+          </>
+        ) : (
+          <p className="note">The Final Budget Outcome didn’t load. {fbo.error}</p>
+        )}
       </section>
 
       <section>

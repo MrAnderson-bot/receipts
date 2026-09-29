@@ -1,7 +1,7 @@
 // One shape for every state fuel price scheme, so a new scheme is one new module.
 // Prices are cents per litre with one decimal, the way every scheme quotes them.
 
-export type FuelCode = "NSW" | "VIC" | "QLD" | "WA" | "SA" | "TAS";
+export type FuelCode = "NSW" | "VIC" | "QLD" | "WA" | "SA" | "TAS" | "NT";
 
 export type FuelType = "U91" | "E10" | "P95" | "P98" | "DL" | "PD" | "LPG" | "E85" | "B20" | "OTHER";
 

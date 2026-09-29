@@ -7,6 +7,7 @@ import { loadQld, qldKey } from "./qld";
 import { loadSa, saKey } from "./sa";
 import { loadVic, vicKey } from "./vic";
 import { loadWa, waKey } from "./wa";
+import { loadNt, ntKey } from "./nt";
 import { forPage, type FuelCode, type FuelPage, type FuelSummary } from "./types";
 
 export type { FuelCode, FuelSummary, FuelPage, FuelPrice, FuelStat, FuelType } from "./types";
@@ -22,10 +23,11 @@ const FEEDS = {
   SA: { states: ["SA"], load: one("SA", loadSa), key: saKey },
   VIC: { states: ["VIC"], load: one("VIC", loadVic), key: vicKey },
   FUELCHECK: { states: ["NSW", "TAS"], load: loadFuelCheck, key: nswKey },
+  NT: { states: ["NT"], load: one("NT", loadNt), key: ntKey },
 } satisfies Record<string, Feed>;
 export type FuelFeed = keyof typeof FEEDS;
 export const FUEL_FEEDS = Object.keys(FEEDS) as FuelFeed[];
-export const FUEL_CODES: FuelCode[] = ["NSW", "VIC", "QLD", "WA", "SA", "TAS"];
+export const FUEL_CODES: FuelCode[] = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "NT"];
 const feedOf = (code: FuelCode): FuelFeed => FUEL_FEEDS.find((f) => (FEEDS[f].states as FuelCode[]).includes(code))!;
 
 // What the owner has to register for each scheme to go live, or null when it already is. Queensland
@@ -36,17 +38,13 @@ export const feedKeyNeeded = (feed: FuelFeed) => (feed === "QLD" ? null : FEEDS[
 
 // Schemes read through a keyed API. Their free tiers are small (FuelCheck: 2,500 calls a month), so a
 // keyed scheme is read at most three times a day and a failure waits the same eight hours before a retry.
-const keyed = (feed: FuelFeed) => feed !== "WA" && !(feed === "QLD" && !process.env.FUEL_QLD_KEY);
+const keyed = (feed: FuelFeed) => feed !== "WA" && feed !== "NT" && !(feed === "QLD" && !process.env.FUEL_QLD_KEY);
 const HOURS = 3_600;
 const revalidateFor = (feed: FuelFeed) => (keyed(feed) ? 8 * HOURS : 24 * HOURS);
 const cooldownFor = (feed: FuelFeed) => (keyed(feed) ? 8 * HOURS * 1000 : 20 * 60_000);
 
 // Places with no feed this project can read, and why.
 export const NOT_CONNECTED: { name: string; url: string; why: string }[] = [
-  {
-    name: "Northern Territory fuel prices (MyFuel NT)", url: "https://myfuelnt.nt.gov.au/",
-    why: "MyFuel NT publishes no API and no download. Its results page only answers a browser session, so there is nothing a nightly job can read.",
-  },
   {
     name: "ACT fuel prices", url: "https://www.accc.gov.au/consumers/petrol-and-fuel/petrol-price-cycles-in-major-cities",
     why: "The ACT has no fuel price reporting scheme, and NSW FuelCheck does not cover it.",

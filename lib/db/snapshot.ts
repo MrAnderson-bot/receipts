@@ -17,6 +17,7 @@ import { tryGetMigration } from "../sources/migration";
 import { tryGetCrime } from "../sources/crime";
 import { tryGetHomelessness } from "../sources/homelessness";
 import { tryGetAssetSales } from "../sources/finance-sales";
+import { tryGetFbo, fboSeries } from "../sources/fbo";
 import { loadAps } from "../sources/apsc";
 import { loadQuarters, summarise as summariseExpenses } from "../sources/ipea";
 import type { Series } from "../sources/types";
@@ -81,6 +82,16 @@ export async function runSnapshot(): Promise<RunResult[]> {
     // Estimates change with every Budget, so they are kept whole in the snapshot, dated by when they were read.
     await store.saveSnapshot("budget", d.budgetYear, d);
     return `11 series, ${d.budgetYear} Budget`;
+  });
+
+  // Final Budget Outcome: what each year actually cost and raised, by function and by receipts head. The
+  // series are the actuals; the whole set of tables is kept per year so the estimate-versus-outcome gap is too.
+  await step("fbo", async () => {
+    const d = need(await tryGetFbo());
+    const series = fboSeries(d);
+    for (const s of series) await store.saveSeries(s);
+    for (const f of d.years) await store.saveSnapshot("fbo", f.year, f);
+    return `${d.years.length} years to ${d.latest.year}, ${series.length} series${d.missing.length ? `; not read: ${d.missing.join("; ")}` : ""}`;
   });
 
   await step("asset-sales", async () => {
