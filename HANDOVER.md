@@ -411,6 +411,32 @@ gets HTTP 403, a Chrome-style string gets 200). Per the project rule, each gets 
 Order: donations first (one download, every column, one afternoon), then the taxing Acts (one API walk), then bills
 (the id walk is the long part). Add each to `/sources` and to the snapshot, and log the start in `docs/backfill.md`.
 
+## For tomorrow: state grant awards from annual reports, a proven route (written 29 September 2026)
+
+The states publish no register of grant awards, but their departments' annual reports do list recipients, and
+Victoria's are published as accessible Word files whose tables parse with the same code as the Final Budget Outcome
+(`docxTables` in `lib/sources/fbo.ts`). Tested on the Department of Families, Fairness and Housing 2024-25 report:
+
+- Landing page `https://www.dffh.vic.gov.au/publications/annual-report` lists one Word and one PDF link per year,
+  2020-21 to 2024-25 (`/dffh-annual-report-<year>-accessible-version-word`; the link redirects straight to the file).
+- Appendix 3 "Grants and transfer payments": eight tables, one per departmental output (Community Participation,
+  Disability Services, Housing Support and Homelessness Assistance, LGBTIQA+ equality, Primary Prevention of Family
+  Violence, Support to Veterans, Women's policy, Youth), each headed "Organisation | Payment ($)" with a "Total" row
+  to drop. 2024-25: 718 recipient rows, about $97M, every row with an amount. The table caption is the output name,
+  which is the only grouping the report gives; there is no program, date or ABN.
+- Reachable without a bot check: DFFH, Education, Health, Justice, Transport and Planning, Government Services,
+  Treasury and Finance, Premier and Cabinet. **Behind a Cloudflare challenge: DJSIR (jobs, regions, industry) and
+  DEECA (environment, energy, water)**, which are two of the largest grant-givers, so a Victorian set from this route
+  is incomplete by construction and must say so on the page.
+- Each department's report has to be found and its grants appendix identified by hand once (heading and table
+  shape vary); after that, one download per department per year. WA, the ACT, Tasmania and SA departments publish
+  annual reports too (SA and Tasmania behind the bot check, so PDF by hand), each with its own layout.
+
+Build shape when wanted: `lib/sources/state-grants/vic-annual-reports.ts` with a fixed list of (department,
+year, file URL, appendix heading), rows into `state_grants` with `program` = output, `source_url` = the report,
+and a coverage line naming the departments included and the two that could not be read. Hand-gathered means
+hand-gathered: label it a partial record, not the state's total.
+
 ## What to do next, in order
 
 1. ~~Put it in git~~ Done: https://github.com/MrAnderson-bot/receipts, AGPLv3.
