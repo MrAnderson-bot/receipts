@@ -28,27 +28,27 @@ export const loadStateGrantsFull = (code: Exclude<ConnectedCode, "NSW">) => FULL
 export const NOT_CONNECTED: { name: string; url: string; why: string }[] = [
   {
     name: "Victorian grants awarded", url: "https://www.vic.gov.au/grants-and-programs",
-    why: "The grants and programs finder is an opportunities index: its 171 grant records carry open and close dates, a funding range and a department, but no recipients or amounts awarded. Recipients are published as hand-written pages program by program, and the only award lists on data.vic.gov.au are single funds, the newest a 2020-21 Sustainability Fund file.",
+    why: "No register of awards exists. The grants and programs finder is an opportunities index: its 171 grant records carry open and close dates, a funding range and a department, but no recipients or amounts awarded. Recipients are published as hand-written pages program by program, and the only award lists on data.vic.gov.au are single funds, the newest a 2020-21 Sustainability Fund file.",
   },
   {
     name: "Western Australian departmental grants", url: "https://www.wa.gov.au/service/community-services/grants-and-subsidies",
-    why: "A directory of programs, not of awards: no grants dataset on data.wa.gov.au, no departmental list of recipients, and wa.gov.au’s content API refuses non-browser clients. Lotterywest’s approved grants are on this page; the State’s departments are not.",
+    why: "No register of awards exists (re-checked 29 September 2026: wa.gov.au answers a browser-style request, and its data catalogue’s 326 “grants” datasets are none of them a list of recipients). A directory of programs, not of awards: no grants dataset on data.wa.gov.au, no departmental list of recipients, and wa.gov.au’s content API refuses non-browser clients. Lotterywest’s approved grants are on this page; the State’s departments are not.",
   },
   {
     name: "South Australian grants awarded", url: "https://data.sa.gov.au/data/dataset?q=grants",
-    why: "No central finder or register. data.sa.gov.au holds only single-program recipient lists (Grants SA, Multicultural Grants, Community Services Support Program, SAFC), the newest from 2019-20, and treasury.sa.gov.au, sa.gov.au, dpc.sa.gov.au and dhs.sa.gov.au all sit behind a Cloudflare challenge that refuses non-browser clients, so even department recipient pages cannot be read automatically.",
+    why: "Blocked by a bot check (a Cloudflare “Just a moment” challenge, tested 29 September 2026), which this project will not automate past. No central finder or register. data.sa.gov.au holds only single-program recipient lists (Grants SA, Multicultural Grants, Community Services Support Program, SAFC), the newest from 2019-20, and treasury.sa.gov.au, sa.gov.au, dpc.sa.gov.au and dhs.sa.gov.au all sit behind a Cloudflare challenge that refuses non-browser clients, so even department recipient pages cannot be read automatically.",
   },
   {
     name: "Tasmanian grants awarded", url: "https://www.treasury.tas.gov.au/budget-and-financial-management/guidelines-instructions-and-legislation/fma-treasurers-instructions",
-    why: "No whole-of-government register or dataset: Treasurer’s Instruction FC-12 leaves grant reporting to each agency’s annual report, data.gov.au holds no Tasmanian grants list, and the pages where Business Tasmania, Arts Tasmania, Active Tasmania, State Growth and Service Tasmania list recipients sit behind a Cloudflare challenge that refuses automated readers.",
+    why: "Blocked by a bot check (a Cloudflare “Just a moment” challenge, tested 29 September 2026), which this project will not automate past. No whole-of-government register or dataset: Treasurer’s Instruction FC-12 leaves grant reporting to each agency’s annual report, data.gov.au holds no Tasmanian grants list, and the pages where Business Tasmania, Arts Tasmania, Active Tasmania, State Growth and Service Tasmania list recipients sit behind a Cloudflare challenge that refuses automated readers.",
   },
   {
     name: "ACT grants awarded", url: "https://www.act.gov.au/open/administration-of-government-grants-in-the-act",
-    why: "The ACT’s grants policy requires each directorate to publish its own awards on its own website. grants.act.gov.au is a directory of open opportunities, the only grant datasets on data.act.gov.au are two anonymised COVID-19 business-support tables from 2022, and grant payments are not in the invoices register.",
+    why: "No register of awards exists. The ACT’s grants policy requires each directorate to publish its own awards on its own website. grants.act.gov.au is a directory of open opportunities, the only grant datasets on data.act.gov.au are two anonymised COVID-19 business-support tables from 2022, and grant payments are not in the invoices register.",
   },
   {
     name: "Northern Territory grants awarded", url: "https://grantsnt.nt.gov.au/grants",
-    why: "GrantsNT’s public search API returns only the 46 open or upcoming rounds, with agency, dates and eligibility. Awarded grants exist solely in each recipient’s login-only portal, a grant’s page has no recipients section, there is no grants dataset on data.nt.gov.au, and nt.gov.au’s grants directory sits behind a Cloudflare challenge.",
+    why: "No register of awards exists, and the directory is behind a bot check (a Cloudflare challenge, tested 29 September 2026). GrantsNT’s public search API returns only the 46 open or upcoming rounds, with agency, dates and eligibility. Awarded grants exist solely in each recipient’s login-only portal, a grant’s page has no recipients section, there is no grants dataset on data.nt.gov.au, and nt.gov.au’s grants directory sits behind a Cloudflare challenge.",
   },
 ];
 

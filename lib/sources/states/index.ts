@@ -19,7 +19,7 @@ export const STATE_CODES = Object.keys(LOADERS) as StateCode[];
 export const NOT_CONNECTED: { name: string; url: string; why: string }[] = [
   {
     name: "South Australia", url: "https://www.tenders.sa.gov.au/contract/search",
-    why: "A public register with no download, no contracts dataset on data.sa.gov.au, and a site that only opens for a web browser. It runs the same system as Victoria, so the same hand-gathered snapshot approach would work.",
+    why: "Blocked by a bot check (a Cloudflare “Just a moment” challenge, tested 29 September 2026), which this project will not automate past. A public register with no download, no contracts dataset on data.sa.gov.au, and a site that only opens for a web browser. It runs the same system as Victoria, so the same hand-gathered snapshot approach would work.",
   },
 ];
 

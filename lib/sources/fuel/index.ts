@@ -45,10 +45,6 @@ const cooldownFor = (feed: FuelFeed) => (keyed(feed) ? 8 * HOURS * 1000 : 20 * 6
 
 // Places with no feed this project can read, and why.
 export const NOT_CONNECTED: { name: string; url: string; why: string }[] = [
-  {
-    name: "ACT fuel prices", url: "https://www.accc.gov.au/consumers/petrol-and-fuel/petrol-price-cycles-in-major-cities",
-    why: "The ACT has no fuel price reporting scheme, and NSW FuelCheck does not cover it.",
-  },
 ];
 
 // Uncached and with every station row: for the snapshot only, which stores the rows itself.

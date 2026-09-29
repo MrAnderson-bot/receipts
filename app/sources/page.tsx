@@ -32,7 +32,7 @@ const NOT_CONNECTED = [
   {
     name: "Earnings of ASX-listed companies",
     url: "https://www.asx.com.au/markets/trade-our-cash-market/announcements",
-    why: "Listed companies report earnings as PDF announcements. There is no open dataset, the ASX’s own data is licensed commercially, and the free feeds people use are unofficial and barred from republication. The Tax Office’s transparency list on the companies page is the open alternative.",
+    why: "Licensed data, not open. Listed companies report earnings as PDF announcements. There is no open dataset, the ASX’s own data is licensed commercially, and the free feeds people use are unofficial and barred from republication. The Tax Office’s transparency list on the companies page is the open alternative.",
   },
   ...STATES_NOT_CONNECTED,
   ...STATE_GRANTS_NOT_CONNECTED,
