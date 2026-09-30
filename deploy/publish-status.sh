@@ -17,10 +17,12 @@ cd "$APP_DIR" && node -e '
     const db = new DatabaseSync("data/receipts.db", { readOnly: true });
     const runs = db.prepare("select started_at, finished_at, ok, saved, failed, detail from runs order by id desc limit 4").all();
     const local = (iso) => iso ? new Date(iso).toLocaleString("en-AU", { timeZone: "Australia/Sydney", hour12: false }) : "not finished";
+    console.log("state grant lines stored: " + db.prepare("select count(*) n from state_grants").get().n);
     console.log("runs (Canberra time):");
     for (const r of runs) {
-      console.log("  " + local(r.started_at) + " to " + local(r.finished_at) + ": " + r.saved + " steps done, " + r.failed + " failed");
       let steps = []; try { steps = JSON.parse(r.detail || "[]"); } catch {}
+      const skipped = steps.filter((s) => s.ok && String(s.detail).startsWith("not re-read")).length;
+      console.log("  " + local(r.started_at) + " to " + local(r.finished_at) + ": " + r.saved + " steps done" + (skipped ? " (" + skipped + " already done today)" : "") + ", " + r.failed + " failed");
       for (const s of steps.filter((s) => !s.ok)) console.log("    FAILED " + s.source + ": " + String(s.detail).slice(0, 220));
     }
   } catch (e) { console.log("could not read the database: " + e.message); }

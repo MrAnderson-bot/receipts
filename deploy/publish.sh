@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Nightly job on the engine-room VM: pull the latest code, store today's
-# snapshot, build the site as plain files, push them to Cloudflare Pages, and
+# The publish job on the engine-room VM, run four times a day by receipts-publish.timer: pull the latest code, store the
+# snapshot, build the site as plain files, push them to Cloudflare Pages, and (once a day)
 # back the database up to Cloud Storage.
 #
 # Settings come from /etc/receipts.env (see vm-setup.sh):
@@ -49,13 +49,20 @@ node -e "
 # One copy a day is enough (each is about 6.5 GB), whichever run gets there first.
 if [ -n "${BACKUP_BUCKET:-}" ] && ! gcloud storage ls "$BACKUP_BUCKET/receipts-$(date -u +%F).db" >/dev/null 2>&1; then
   log "Backing up the database"
-  # Copy through SQLite so the write-ahead log is folded in and the copy is consistent.
-  node -e "
-    const { DatabaseSync } = require('node:sqlite');
-    const db = new DatabaseSync('data/receipts.db', { readOnly: true });
-    db.exec(\"VACUUM INTO 'data/receipts-backup.db'\");
-  "
-  gcloud storage cp data/receipts-backup.db "$BACKUP_BUCKET/receipts-$(date -u +%F).db" --quiet
+  # Copy through SQLite so the write-ahead log is folded in and the copy is consistent. VACUUM INTO
+  # refuses an existing target, so a copy left by an interrupted run is removed first and after.
+  # The site is already live by now, so a failed backup is logged and the run still ends well:
+  # it must not make systemd rebuild the site every twenty minutes for a storage problem.
+  rm -f data/receipts-backup.db
+  if node -e "
+      const { DatabaseSync } = require('node:sqlite');
+      const db = new DatabaseSync('data/receipts.db', { readOnly: true });
+      db.exec(\"VACUUM INTO 'data/receipts-backup.db'\");
+    " && gcloud storage cp data/receipts-backup.db "$BACKUP_BUCKET/receipts-$(date -u +%F).db" --quiet; then
+    log "Backup stored"
+  else
+    log "Backup FAILED (the site was published; the next run tries again)"
+  fi
   rm -f data/receipts-backup.db
 fi
 

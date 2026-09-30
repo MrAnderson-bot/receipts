@@ -1,6 +1,6 @@
 # Receipts: handover
 
-Last updated 30 September 2026. For how each data source works and its quirks, see `README.md`. This file covers
+Last updated 30 September 2026 (afternoon). For how each data source works and its quirks, see `README.md`. This file covers
 where the project stands, the database, decisions already made, and what to do next.
 
 ## What this is
@@ -275,10 +275,16 @@ arrive in the next Budget's tables). WA's newest open contract file is 2023-24. 
      last runs and every failed step with its message (`-Now` starts a publish as well). Until then the VM still runs once a day and pulls
      the new code at its next 04:30 run.
 
-## Start here tomorrow (written 29 September 2026, evening)
+## Start here tomorrow (written 30 September 2026, afternoon)
 
 Everything below this list is detail; this is the order to work in.
 
+0. **Check the site is updating on its own.** `.\deploy\publish-status.ps1` (one command) shows the timer's next run,
+   the last four runs, how many steps each skipped as already done today, every failed step with its message, and the
+   state grant line count. Expected from 1 October: four runs a day, 0 failed, state grant lines in the tens of
+   thousands, and the home page's cash rate at 4.60% dated 30 Sep 2026. Without the VM: `https://receipts-byv.pages.dev/api/snapshot`
+   (`lastRun`) and the foot of every page ("Figures read ..."). If a run shows failures, `/sources` names the step; fix
+   the loader, push, and the next run retries it. The rest of this list was written the evening before all that.
 1. **Check last night's publish.** It failed on 28 September (disk full) and the disk was resized on 29 September, so the
    29 September run at 04:32 Canberra time is the first with room. `.deployackfill-status.ps1` shows disk and
    database; `gcloud compute ssh receipts-engine --zone australia-southeast1-b --tunnel-through-iap --command "sudo journalctl -u receipts-publish -n 20 --no-pager -o cat"`

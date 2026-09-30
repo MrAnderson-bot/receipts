@@ -2,8 +2,11 @@
 Description=Receipts: snapshot, build and publish the site
 After=network-online.target
 Wants=network-online.target
-# A failed run is retried (below) as often as it takes; never lock the unit out for retrying.
-StartLimitIntervalSec=0
+# A failed run is retried (below), but at most twice per scheduled run: three starts in two hours, then
+# the unit waits for the next timer slot (they are at least three hours apart), so a lasting fault (an
+# expired deploy token, say) costs two extra builds, not a build every twenty minutes all day.
+StartLimitIntervalSec=2h
+StartLimitBurst=3
 
 [Service]
 Type=oneshot
