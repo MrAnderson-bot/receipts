@@ -30,7 +30,7 @@ type ApiPage = { data: ApiRow[]; totalCount: number; totalPages: number; hasNext
 
 async function readPage(page: number): Promise<ApiPage> {
   const url = `${API}?page=${page}&pageSize=${PAGE_SIZE}&sortBy=date&sortOrder=asc`;
-  const res = await fetch(url, { headers, cache: "no-store" });
+  const res = await fetch(url, { headers, next: { revalidate: 3_600 } }); // not cache: "no-store": called outside unstable_cache, and the static build refuses to render a route that uses it
   if (!res.ok) throw new Error(`lotterywest.wa.gov.au returned ${res.status} for page ${page} of the approved grants list`);
   const body = (await res.json()) as Partial<ApiPage>;
   if (!Array.isArray(body.data)) throw new Error("Lotterywest's approved grants endpoint no longer returns a data array");

@@ -264,9 +264,12 @@ arrive in the next Budget's tables). WA's newest open contract file is 2023-24. 
      says the schedule; every page ends with "Figures read <time> Canberra time". The journal gets the same summary.
      `receipts-publish.service` retries a run that exits non-zero (build or deploy failure) after twenty minutes,
      without a start limit.
-  4. *Still to prove*: the three failed steps from the 30 September 04:30 run. Queensland and WA state grants load
-     in seconds from the dev machine, so the VM's failure is specific to it (a cloud address refused, or memory);
-     the next run's failure list on `/sources` will say. **To put all of this live**, run once from the dev machine:
+  4. *The three failed steps*, found with the new status script: `state-grants:NSW`, `QLD` and `WA` all died with
+     "couldn't be rendered statically because it used revalidate: 0". Their loaders fetched with `cache: "no-store"`,
+     which Next allows inside `unstable_cache` but not from the static snapshot route, and the snapshot calls them
+     uncached. Same bug the APSC and ATO loaders had once (their comments say so). Fixed 30 September: those fetches
+     use `next: { revalidate: 3_600 }` (the POST to NSW simply drops the option). Rule: a loader the snapshot calls
+     uncached must never pass `cache: "no-store"`. `state_grants` fills on the first run with the fix. **To put all of this live**, run once from the dev machine:
      `gcloud compute ssh receipts-engine --zone australia-southeast1-b --tunnel-through-iap --command "sudo bash /opt/receipts/deploy/vm-install-publish.sh"`
      (pulls, installs the timer and service, starts a publish now). After that, `.deploypublish-status.ps1` shows the timer, the
      last runs and every failed step with its message (`-Now` starts a publish as well). Until then the VM still runs once a day and pulls

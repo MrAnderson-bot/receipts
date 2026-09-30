@@ -59,7 +59,7 @@ const AGENCIES: Record<string, string> = {
 type YearFile = { year: string; label: string; url: string };
 
 async function json(url: string): Promise<any> {
-  const res = await fetch(url, { headers, cache: "no-store" });
+  const res = await fetch(url, { headers, next: { revalidate: 3_600 } }); // not cache: "no-store": called outside unstable_cache, and the static build refuses to render a route that uses it
   if (!res.ok) throw new Error(`data.qld.gov.au returned ${res.status}`);
   return res.json();
 }
@@ -85,7 +85,7 @@ async function listYears(): Promise<YearFile[]> {
 type Parsed = { grants: StateGrant[]; rows: StateGrantRow[]; unknownCodes: string[] };
 
 async function readYear(file: YearFile): Promise<Parsed> {
-  const res = await fetch(file.url, { headers, cache: "no-store" });
+  const res = await fetch(file.url, { headers, next: { revalidate: 3_600 } }); // too big for the fetch cache, which skips it; see json() above for why not "no-store"
   if (!res.ok) throw new Error(`data.qld.gov.au returned ${res.status} for the ${file.year} file`);
   const table = parseCsv(await res.text());
   const head = table[0] ?? [];

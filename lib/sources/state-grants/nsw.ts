@@ -67,7 +67,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // A server error (5xx) is transient on this site and gets one short pause.
 async function post(url: string, body: unknown): Promise<any> {
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), cache: "no-store" });
+    // No cache: "no-store" here: the snapshot calls this outside unstable_cache, and the static build refuses to render a route that uses it. A POST is never cached by Next anyway.
+    const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
     if (res.ok) return res.json();
     const refused = res.status === 403 || res.status === 429;
     if (attempt >= 1 || (!refused && res.status < 500)) throw new Error(`nsw.gov.au returned ${res.status}`);
