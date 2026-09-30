@@ -15,4 +15,6 @@ $zone = "australia-southeast1-b"
 $arg = ""
 if ($Now) { $arg = " now" }
 
-gcloud compute ssh $vm --zone $zone --tunnel-through-iap --command "sudo bash /opt/receipts/deploy/publish-status.sh$arg"
+# If the VM has not pulled the script yet, pull first (as the job user, so file ownership stays right).
+$script = "/opt/receipts/deploy/publish-status.sh"
+gcloud compute ssh $vm --zone $zone --tunnel-through-iap --command "test -f $script || sudo -u receipts git -C /opt/receipts pull --ff-only -q; sudo bash $script$arg"
