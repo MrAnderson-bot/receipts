@@ -268,7 +268,8 @@ arrive in the next Budget's tables). WA's newest open contract file is 2023-24. 
      in seconds from the dev machine, so the VM's failure is specific to it (a cloud address refused, or memory);
      the next run's failure list on `/sources` will say. **To put all of this live**, run once from the dev machine:
      `gcloud compute ssh receipts-engine --zone australia-southeast1-b --tunnel-through-iap --command "sudo bash /opt/receipts/deploy/vm-install-publish.sh"`
-     (pulls, installs the timer and service, starts a publish now). Until then the VM still runs once a day and pulls
+     (pulls, installs the timer and service, starts a publish now). After that, `.deploypublish-status.ps1` shows the timer, the
+     last runs and every failed step with its message (`-Now` starts a publish as well). Until then the VM still runs once a day and pulls
      the new code at its next 04:30 run.
 
 ## Start here tomorrow (written 29 September 2026, evening)
