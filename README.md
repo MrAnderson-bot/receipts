@@ -58,7 +58,7 @@ One module per source in `lib/sources`, all returning the shapes in `lib/sources
 | Module | Source | Gives |
 |---|---|---|
 | `abs.ts` | ABS Data API (SDMX, CC BY 4.0) | GDP, GDP per person, CPI and its rent, electricity, gas, food and fuel components, unemployment, wages, company profits growth, household spending, saving ratio, terms of trade, population, population growth, births, dwellings approved, dwellings completed |
-| `rba.ts` | RBA statistical tables (CSV) | cash rate, AUD/USD, credit card balances accruing interest |
+| `rba.ts` | RBA statistical tables (CSV) and the cash rate decisions page | cash rate target (daily, carried to today from the decisions page) and its monthly average, bond yields, AUD/USD, new mortgage rate, household debt to income, credit card balances accruing interest |
 | `../derived.ts` | worked out from the above | new residents per new dwelling (four-quarter population growth over dwellings completed) |
 | `austender.ts` | AusTender OCDS API (CC BY 3.0 AU) | contract notices |
 | `grantconnect.ts` | GrantConnect "Grant Award Published" report, xlsx (CC BY 3.0 AU) | grant awards |

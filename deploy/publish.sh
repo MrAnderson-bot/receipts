@@ -26,6 +26,10 @@ git pull --ff-only
 npm ci --no-audit --no-fund
 
 log "Snapshot and build"
+# Next keeps its fetch cache in .next/cache between builds and honours each loader's revalidate
+# window there. Several loaders use 24 hours, and two runs 24 hours apart with the timer's random
+# delay can land under that, so a day-old file would be reused. Every run must read the publishers fresh.
+rm -rf .next/cache/fetch-cache
 # The build fetches every source and renders every page; the VM is small, so cap Node's heap.
 NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=1536}" npm run snapshot
 

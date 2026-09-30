@@ -1,6 +1,6 @@
 # Receipts: handover
 
-Last updated 22 September 2026. For how each data source works and its quirks, see `README.md`. This file covers
+Last updated 30 September 2026. For how each data source works and its quirks, see `README.md`. This file covers
 where the project stands, the database, decisions already made, and what to do next.
 
 ## What this is
@@ -231,6 +231,36 @@ README. Keep the Victorian snapshot, NSW and Tasmania out of any paid product un
 South Australia's contracts (same blocked system as Victoria). Earnings of ASX-listed companies (no open source:
 PDF announcements, commercial licensing). The Final Budget Outcome as its own document (PDF only; its figures
 arrive in the next Budget's tables). WA's newest open contract file is 2023-24. Tasmania only exposes 30 days.
+
+## Status on 30 September 2026 (midday)
+
+- **Last night's publish ran and deployed** (04:36 to 04:47 Canberra): the Final Budget Outcome section, the Northern
+  Territory on the fuel page and the IPEA links all render on the public site. But the run reports **79 saved, 3 failed**,
+  and `state_grants` is **still 0 rows** with the State grants page saying no NSW snapshot has been taken. The three
+  failures are most likely the three `state-grants:*` steps (that would explain both facts), possibly the state sites
+  refusing a Google Cloud address, but this is unconfirmed: the session could not read the VM log. Run
+  `gcloud compute ssh receipts-engine --zone australia-southeast1-b --tunnel-through-iap --command "sudo journalctl -u receipts-publish -n 60 --no-pager -o cat"`
+  and look for the `failed` lines.
+- **Cash rate missed the 30 September rise to 4.60% (+0.25).** Cause: the `cash-rate` series read RBA Table F1.1, a
+  *monthly average* published on the 1st, so a decision late in a month appeared a month later and diluted; the site
+  showed "4.35% Aug 2026". Fixed in `lib/sources/rba.ts`: a new daily series `cash-rate-target` (Table F1,
+  `FIRMMCRTD`, one point per business day since 2016) is the headline, carried forward to today from the RBA's own
+  decisions table at `rba.gov.au/statistics/cash-rate/` when a decision is in effect but not yet in the CSV (the page
+  failing changes nothing). The monthly average stays stored under its old id, so no series changes format. Tested
+  on 30 September: the daily table ended 29 September at 4.35 and the decisions page added 30 September at 4.60.
+- **Publish freshness, reviewed at the owner's request.** What the once-a-day build misses:
+  1. *Timing.* Everything is read at 04:30. The RBA posts daily tables about 09:00 and decisions at 14:30; the ABS
+     releases at 11:30. So each figure is 17 to 48 hours behind its publisher by schedule alone. A second run at
+     about 12:30 Canberra (after the ABS, after the RBA's morning tables) would halve that; the build took 11 minutes
+     this morning, and the snapshot store is safe to run twice a day (snapshots upsert per day, observations
+     de-duplicate on value). Not done: it is the owner's call on VM load; it needs a second timer and a flag on
+     `publish.sh` to skip the backup on the midday run.
+  2. *Stale cache.* Next keeps `.next/cache/fetch-cache` between builds and honours each loader's `revalidate` there.
+     Nine loaders use 24 hours (Budget, Treasury, states, state grants, companies, TVFY, asset sales, migration,
+     crime), and with `RandomizedDelaySec=10m` two runs can be under 24 hours apart, so a day-old file was reused on
+     some days. `deploy/publish.sh` now deletes that directory before the build. Live at the next pull.
+  3. *No "built at" on the pages.* Only `/sources` says when the last snapshot ran. A footer line would let a reader
+     see the age of what they are looking at. Not done.
 
 ## Start here tomorrow (written 29 September 2026, evening)
 

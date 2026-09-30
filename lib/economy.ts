@@ -10,7 +10,7 @@ import type { Series, SeriesResult } from "./sources/types";
 export const GROUPS: { title: string; ids: string[] }[] = [
   { title: "Recession signals", ids: ["sahm-rule", "yield-curve", "bond-10y"] },
   { title: "Growth", ids: ["gdp-growth", "gdp-per-capita", "population", "births"] },
-  { title: "Prices and rates", ids: ["cpi", "cash-rate", "aud-usd"] },
+  { title: "Prices and rates", ids: ["cpi", "cash-rate-target", "aud-usd"] },
   { title: "Cost of living", ids: ["real-wages", "cpi-rents", "cpi-electricity", "cpi-gas", "cpi-food", "cpi-fuel", "mortgage-rate", "dwelling-price", "household-debt-income", "credit-card-debt"] },
   { title: "Housing supply", ids: ["building-approvals", "dwellings-completed", "population-change", "housing-pressure"] },
   { title: "Jobs, pay and profits", ids: ["unemployment", "participation", "underemployment", "wages", "productivity", "company-profits"] },
@@ -18,7 +18,7 @@ export const GROUPS: { title: string; ids: string[] }[] = [
   { title: "Government investment and debt", ids: ["public-investment-share", "gross-debt-share-gdp"] },
 ];
 
-export const HEADLINE_IDS = ["gdp-growth", "cpi", "unemployment", "cash-rate", "wages", "aud-usd"];
+export const HEADLINE_IDS = ["gdp-growth", "cpi", "unemployment", "cash-rate-target", "wages", "aud-usd"];
 
 export async function getIndicators(ids?: string[]): Promise<SeriesResult[]> {
   // A derived indicator needs its inputs fetched even when only it was asked for.

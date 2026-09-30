@@ -28,8 +28,16 @@ export const RBA_SERIES: RbaSpec[] = [
     file: "c1-data.csv", seriesId: "CCCCSBAISA", table: "Table C1", from: "2016-01-01", multiply: 1_000_000,
   },
   {
-    id: "cash-rate", label: "Cash rate", unit: "%", frequency: "monthly", decimals: 2,
-    note: "RBA cash rate target, monthly average.",
+    // The daily table is the one to show: a Board decision is in it the next business morning. The
+    // monthly table below is a month average published on the 1st, so a change late in a month does
+    // not appear in it until the following month, and then diluted.
+    id: "cash-rate-target", label: "Cash rate", unit: "%", frequency: "daily", decimals: 2,
+    note: "RBA cash rate target, the rate set by the Board, on the day. The RBA posts each day's figure the next business morning, a new decision is added from the RBA's decisions page from the day it takes effect.",
+    file: "f1-data.csv", seriesId: "FIRMMCRTD", table: "Table F1", from: "2016-01-01",
+  },
+  {
+    id: "cash-rate", label: "Cash rate, monthly average", unit: "%", frequency: "monthly", decimals: 2,
+    note: "RBA cash rate target averaged over the month, from the monthly table published on the first of the next month. Kept as history; the daily target is the figure shown.",
     file: "f1.1-data.csv", seriesId: "FIRMMCRT", table: "Table F1.1", from: "2016-01-01",
   },
   {
@@ -67,6 +75,52 @@ function isoDate(raw: string): string | null {
   return null;
 }
 
+// The RBA's decisions page lists every Board decision with its effective date the afternoon it is
+// announced, a business day or two before the daily table carries the new figure. It is read only to
+// carry the daily target series forward to today; the CSV table stays the record.
+// https://www.rba.gov.au/statistics/cash-rate/
+export const CASH_RATE_DECISIONS_URL = "https://www.rba.gov.au/statistics/cash-rate/";
+
+export type CashRateDecision = { effective: string; change: number; target: number };
+
+export async function fetchCashRateDecisions(): Promise<CashRateDecision[]> {
+  const res = await fetch(CASH_RATE_DECISIONS_URL, {
+    headers: { "User-Agent": "receipts-dashboard (open-source economic dashboard)" },
+    next: { revalidate: 3_600 },
+  });
+  if (!res.ok) throw new Error(`RBA returned ${res.status} for the cash rate decisions page`);
+  const html = (await res.text()).replace(/\s+/g, " ");
+  const out: CashRateDecision[] = [];
+  // <th scope="row">30 Sep 2026</th> <td>+0.25</td> <td>4.60</td>
+  const row = /<th scope="row">\s*(\d{1,2}) ([A-Za-z]{3}) (\d{4})\s*<\/th>\s*<td>\s*([+-]?\d+\.\d+)\s*<\/td>\s*<td>\s*(\d+\.\d+)\s*<\/td>/g;
+  for (const m of html.matchAll(row)) {
+    const month = MONTHS.indexOf(m[2].toLowerCase());
+    if (month < 0) continue;
+    out.push({
+      effective: `${m[3]}-${String(month + 1).padStart(2, "0")}-${m[1].padStart(2, "0")}`,
+      change: Number(m[4]),
+      target: Number(m[5]),
+    });
+  }
+  if (out.length === 0) throw new Error("No decisions found on the RBA cash rate page");
+  return out.sort((a, b) => (a.effective < b.effective ? -1 : 1));
+}
+
+const todayInSydney = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Australia/Sydney" }).format(new Date());
+
+// Add any decision already in effect that the daily table has not reached yet. The page failing
+// changes nothing: the series is then just the table.
+async function extendWithDecisions(points: Point[]): Promise<Point[]> {
+  try {
+    const last = points[points.length - 1].period;
+    const today = todayInSydney();
+    const newer = (await fetchCashRateDecisions()).filter((d) => d.effective > last && d.effective <= today);
+    return [...points, ...newer.map((d) => ({ period: d.effective, value: d.target }))];
+  } catch {
+    return points;
+  }
+}
+
 export async function fetchRba(spec: RbaSpec): Promise<Series> {
   const url = `https://www.rba.gov.au/statistics/tables/csv/${spec.file}`;
   const res = await fetch(url, {
@@ -100,6 +154,7 @@ export async function fetchRba(spec: RbaSpec): Promise<Series> {
     }));
   }
   if (points.length === 0) throw new Error(`RBA returned no observations for ${spec.id}`);
+  if (spec.id === "cash-rate-target") points = await extendWithDecisions(points);
 
   const { file, seriesId, table, from, multiply, aggregate, ...rest } = spec;
   return { ...rest, points, source: `RBA, ${table}`, sourceUrl: url };
