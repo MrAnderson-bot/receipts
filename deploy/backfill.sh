@@ -37,12 +37,14 @@ default_units() {
 }
 UNITS="${BACKFILL_UNITS:-$(default_units)}"
 
-# The publish runs at 04:30 Canberra time and takes about 15 minutes. Don't start a pass while it
-# is active, or in the half hour around its start, so a pass never overlaps `npm ci` or the build.
+# The publish runs at 04:30, 09:15, 12:30 and 16:00 Canberra time (deploy/receipts-publish.timer) and
+# takes about 15 minutes. Don't start a pass while it is active, or in the half hour around a start,
+# so a pass never overlaps `npm ci` or the build.
 publish_window() {
   local hm
   hm=$(TZ=Australia/Sydney date +%H%M)
-  [ "$hm" -ge 0420 ] && [ "$hm" -le 0500 ]
+  { [ "$hm" -ge 0420 ] && [ "$hm" -le 0500 ]; } || { [ "$hm" -ge 0905 ] && [ "$hm" -le 0945 ]; } \
+    || { [ "$hm" -ge 1220 ] && [ "$hm" -le 1300 ]; } || { [ "$hm" -ge 1550 ] && [ "$hm" -le 1630 ]; }
 }
 wait_for_publish() {
   while systemctl is-active --quiet receipts-publish.service || publish_window; do

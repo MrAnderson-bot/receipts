@@ -46,7 +46,7 @@ export type DbStats = {
   stateGrants: number; // state grant payment lines, every published column
   grants: number; // Commonwealth grant awards from GrantConnect, every report column
   contractReleases: number; // every AusTender release (original notices and amendments), every API field
-  lastRun: { startedAt: string; finishedAt: string | null; ok: boolean; saved: number; failed: number } | null;
+  lastRun: { startedAt: string; finishedAt: string | null; ok: boolean; saved: number; failed: number; failures: { source: string; detail: string }[] } | null;
 };
 
 export type RunResult = { source: string; ok: boolean; detail: string };
@@ -61,7 +61,7 @@ export interface Store {
 
   // Page-level summaries (contracts, grants, states, budget ...), one per source, key and day.
   saveSnapshot(source: string, key: string, payload: unknown): Promise<void>;
-  snapshots(source: string, key: string, limit?: number): Promise<{ capturedOn: string; payload: unknown }[]>;
+  snapshots(source: string, key: string, limit?: number): Promise<{ capturedOn: string; capturedAt: string; payload: unknown }[]>;
 
   // The Tax Office's full company list, kept whole so it can be joined to suppliers and grant recipients by ABN.
   saveCompanies(rows: CompanyRow[]): Promise<number>;
@@ -99,5 +99,7 @@ export interface Store {
 
   startRun(): Promise<number>;
   finishRun(id: number, results: RunResult[]): Promise<void>;
+  // Every finished run started at or after `since` (ISO time), oldest first: what each step did, so a run can skip steps already done today.
+  runsSince(since: string): Promise<{ startedAt: string; results: RunResult[] }[]>;
   stats(): Promise<DbStats>;
 }

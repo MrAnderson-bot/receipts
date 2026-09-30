@@ -330,9 +330,22 @@ export default async function Page() {
           </p>
           <p className="note" style={{ marginTop: 12 }}>
             {db.lastRun
-              ? `Last snapshot ${new Date(db.lastRun.startedAt).toLocaleString("en-AU")}: ${db.lastRun.saved} sources saved${db.lastRun.failed ? `, ${db.lastRun.failed} failed` : ""}.`
-              : "No snapshot has been taken yet. Run npm run snapshot."}
+              ? `Last read ${new Date(db.lastRun.startedAt).toLocaleString("en-AU", { timeZone: "Australia/Sydney" })} Canberra time: ${db.lastRun.saved} steps done${db.lastRun.failed ? `, ${db.lastRun.failed} failed` : ""}.`
+              : "No snapshot has been taken yet. Run npm run snapshot."}{" "}
+            The site is rebuilt four times a day (about 04:30, 09:15, 12:30 and 16:00 Canberra time). Indicator series, AusTender,
+            GrantConnect and fuel prices are re-read every time; slower publications once a day. A run that fails outright is retried
+            after twenty minutes.
           </p>
+          {db.lastRun && db.lastRun.failures.length > 0 && (
+            <div>
+              <p className="note"><strong>Failed on the last read</strong>, each retried on the next run:</p>
+              <ul className="plain">
+                {db.lastRun.failures.map((f) => (
+                  <li key={f.source}><code>{f.source}</code>: {f.detail}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
       )}
 

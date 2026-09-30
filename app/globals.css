@@ -211,6 +211,7 @@ code { font-size: 0.9em; }
 .error p { color: var(--muted); max-width: 60ch; }
 
 footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.85rem; max-width: 80ch; }
+.built { margin-top: 40px; color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
 
 @media (max-width: 980px) {
   .figures.four { grid-template-columns: 1fr 1fr; }

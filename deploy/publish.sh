@@ -22,21 +22,32 @@ fi
 log() { echo "[$(date -u +%FT%TZ)] $*"; }
 
 log "Updating code"
+before=$(git rev-parse HEAD)
 git pull --ff-only
-npm ci --no-audit --no-fund
+# Dependencies are reinstalled only when the lock file changed: npm ci wipes node_modules, which is slow here.
+if [ ! -d node_modules ] || ! git diff --quiet "$before" HEAD -- package-lock.json; then
+  npm ci --no-audit --no-fund
+fi
 
 log "Snapshot and build"
-# Next keeps its fetch cache in .next/cache between builds and honours each loader's revalidate
-# window there. Several loaders use 24 hours, and two runs 24 hours apart with the timer's random
-# delay can land under that, so a day-old file would be reused. Every run must read the publishers fresh.
-rm -rf .next/cache/fetch-cache
+# Next keeps its fetch cache in .next/cache between builds and honours each loader's revalidate window
+# there, so this run re-reads only what has expired: the fast-moving feeds every hour, the rest daily.
 # The build fetches every source and renders every page; the VM is small, so cap Node's heap.
 NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=1536}" npm run snapshot
 
 log "Deploying to Cloudflare Pages"
 npx wrangler pages deploy out --project-name "${PAGES_PROJECT:-receipts}" --branch main --commit-dirty=true
 
-if [ -n "${BACKUP_BUCKET:-}" ]; then
+# What this run did, in the journal: the same summary the Sources page shows.
+node -e "
+  const s = JSON.parse(require('node:fs').readFileSync('out/api/snapshot', 'utf8'));
+  const r = s.lastRun || {};
+  console.log('Read: ' + r.saved + ' steps done, ' + r.failed + ' failed' + (r.failures?.length ? ':' : '.'));
+  for (const f of r.failures || []) console.log('  FAILED ' + f.source + ': ' + f.detail);
+" || true
+
+# One copy a day is enough (each is about 6.5 GB), whichever run gets there first.
+if [ -n "${BACKUP_BUCKET:-}" ] && ! gcloud storage ls "$BACKUP_BUCKET/receipts-$(date -u +%F).db" >/dev/null 2>&1; then
   log "Backing up the database"
   # Copy through SQLite so the write-ahead log is folded in and the copy is consistent.
   node -e "

@@ -221,8 +221,8 @@ export const sqliteStore: Store = {
   },
 
   async snapshots(source, key, limit = 30) {
-    return open().prepare("SELECT captured_on AS capturedOn, payload FROM snapshots WHERE source = ? AND key = ? ORDER BY captured_on DESC LIMIT ?")
-      .all(source, key, limit).map((r) => ({ capturedOn: r.capturedOn as string, payload: JSON.parse(r.payload) }));
+    return open().prepare("SELECT captured_on AS capturedOn, captured_at AS capturedAt, payload FROM snapshots WHERE source = ? AND key = ? ORDER BY captured_on DESC LIMIT ?")
+      .all(source, key, limit).map((r) => ({ capturedOn: r.capturedOn as string, capturedAt: r.capturedAt as string, payload: JSON.parse(r.payload) }));
   },
 
   async saveCompanies(rows: CompanyRow[]) {
@@ -457,6 +457,15 @@ export const sqliteStore: Store = {
       .run(now(), failed === 0 ? 1 : 0, results.length - failed, failed, JSON.stringify(results), id);
   },
 
+  async runsSince(since: string) {
+    const rows = open().prepare("SELECT started_at, detail FROM runs WHERE started_at >= ? AND detail IS NOT NULL ORDER BY id").all(since);
+    return rows.map((r) => {
+      let results: RunResult[] = [];
+      try { results = JSON.parse(String(r.detail)); } catch { /* a run whose detail can't be read counts as having done nothing */ }
+      return { startedAt: String(r.started_at), results };
+    });
+  },
+
   async saveFuelPrices(state: string, rows: FuelPrice[]) {
     const d = open();
     const at = now();
@@ -475,7 +484,9 @@ export const sqliteStore: Store = {
   async stats(): Promise<DbStats> {
     const d = open();
     const count = (table: string) => Number(d.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n);
-    const run = d.prepare("SELECT started_at, finished_at, ok, saved, failed FROM runs ORDER BY id DESC LIMIT 1").get();
+    const run = d.prepare("SELECT started_at, finished_at, ok, saved, failed, detail FROM runs ORDER BY id DESC LIMIT 1").get();
+    let failures: { source: string; detail: string }[] = [];
+    try { failures = (JSON.parse(String(run?.detail ?? "[]")) as RunResult[]).filter((r) => !r.ok).map((r) => ({ source: r.source, detail: r.detail.slice(0, 300) })); } catch { /* an unreadable detail column shows as no failures listed */ }
     return {
       location: path.relative(process.cwd(), FILE).replace(/\\/g, "/"),
       series: count("series"), observations: count("observations"), snapshots: count("snapshots"), companies: count("companies"),
@@ -486,7 +497,7 @@ export const sqliteStore: Store = {
       stateGrants: count("state_grants"),
       grants: count("grants"),
       contractReleases: count("contract_releases"),
-      lastRun: run ? { startedAt: run.started_at, finishedAt: run.finished_at, ok: !!run.ok, saved: run.saved, failed: run.failed } : null,
+      lastRun: run ? { startedAt: run.started_at, finishedAt: run.finished_at, ok: !!run.ok, saved: run.saved, failed: run.failed, failures } : null,
     };
   },
 };

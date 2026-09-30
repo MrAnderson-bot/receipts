@@ -1,10 +1,15 @@
 [Unit]
-Description=Run the Receipts publish job every morning
+Description=Run the Receipts publish job several times a day
 
 [Timer]
-# 04:30 Canberra time, after the previous day's AusTender notices are in.
+# Canberra time. 04:30 after the previous day's AusTender notices are in (this run also backs the
+# database up); 09:15 after the RBA's daily tables (about 09:00); 12:30 after the ABS's 11:30
+# releases; 16:00 after an RBA decision (14:30) and the afternoon's AusTender notices.
 OnCalendar=*-*-* 04:30:00 Australia/Sydney
-RandomizedDelaySec=10m
+OnCalendar=*-*-* 09:15:00 Australia/Sydney
+OnCalendar=*-*-* 12:30:00 Australia/Sydney
+OnCalendar=*-*-* 16:00:00 Australia/Sydney
+RandomizedDelaySec=5m
 Persistent=true
 
 [Install]

@@ -126,7 +126,7 @@ export async function fetchRba(spec: RbaSpec): Promise<Series> {
   const res = await fetch(url, {
     // The RBA site rejects requests that send no user agent at all.
     headers: { "User-Agent": "receipts-dashboard (open-source economic dashboard)" },
-    next: { revalidate: 21_600 },
+    next: { revalidate: 3_600 }, // an hour: the daily tables land about 09:00 and the site is rebuilt several times a day
   });
   if (!res.ok) throw new Error(`RBA returned ${res.status} for ${spec.file}`);
 

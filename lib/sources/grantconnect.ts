@@ -193,7 +193,7 @@ async function load(days: number): Promise<GrantSummary> {
 }
 
 // One download per range every six hours, shared by every page that needs it.
-const cached = unstable_cache(load, ["grantconnect-summary-v2"], { revalidate: 21_600 });
+const cached = unstable_cache(load, ["grantconnect-summary-v2"], { revalidate: 3_600 });
 
 export async function tryGetGrants(days: number): Promise<{ data: GrantSummary | null; error: string | null }> {
   try {

@@ -153,7 +153,7 @@ This replaces the Supabase and Vercel Cron route above unless there is a reason 
   public service on the VM if a model is too heavy for a browser, and rate-limit it if so.
 - **Done on 22 September 2026:** the app builds as a static export (`npm run snapshot` produces `out/`), and the
   VM's job is written: `deploy/vm-setup.sh` (one-time), `deploy/publish.sh` (nightly: pull, snapshot + build, push to
-  Cloudflare Pages, back the database up to Cloud Storage), and the systemd timer at 04:30 Canberra time. The pages
+  Cloudflare Pages, back the database up to Cloud Storage), and the systemd timer, four times a day since 30 September 2026 (04:30 with the backup, 09:15, 12:30, 16:00 Canberra). The pages
   still read the live sources at build time; reading from the database (step 4 below) is a later improvement, not a
   blocker.
 - **Live since 22 September 2026**, all under the owner's own accounts, never a company's, and everything in Sydney.
@@ -165,7 +165,7 @@ This replaces the Supabase and Vercel Cron route above unless there is a reason 
   - One Google Cloud project with one VM (e2-micro, `australia-southeast1-b`, Debian 12, about AUD 10-12 a month)
     and one backup bucket. The default SSH/RDP/ICMP firewall rules are deleted; SSH only through IAP:
     `gcloud compute ssh <vm> --zone australia-southeast1-b --tunnel-through-iap`.
-  - On the VM: repo at `/opt/receipts`, job user `receipts`, `receipts-publish.timer` at 04:30 Canberra time. Secrets
+  - On the VM: repo at `/opt/receipts`, job user `receipts`, `receipts-publish.timer` four times a day (install or change it with `deploy/vm-install-publish.sh`). Secrets
     in `/etc/receipts.env`. Logs: `journalctl -u receipts-publish`.
   - Until the VM has a Cloudflare API token in `/etc/receipts.env`, deploy by hand from the dev machine:
     `npm run snapshot && npx wrangler pages deploy out --project-name receipts --branch main`.
@@ -248,19 +248,28 @@ arrive in the next Budget's tables). WA's newest open contract file is 2023-24. 
   decisions table at `rba.gov.au/statistics/cash-rate/` when a decision is in effect but not yet in the CSV (the page
   failing changes nothing). The monthly average stays stored under its old id, so no series changes format. Tested
   on 30 September: the daily table ended 29 September at 4.35 and the decisions page added 30 September at 4.60.
-- **Publish freshness, reviewed at the owner's request.** What the once-a-day build misses:
-  1. *Timing.* Everything is read at 04:30. The RBA posts daily tables about 09:00 and decisions at 14:30; the ABS
-     releases at 11:30. So each figure is 17 to 48 hours behind its publisher by schedule alone. A second run at
-     about 12:30 Canberra (after the ABS, after the RBA's morning tables) would halve that; the build took 11 minutes
-     this morning, and the snapshot store is safe to run twice a day (snapshots upsert per day, observations
-     de-duplicate on value). Not done: it is the owner's call on VM load; it needs a second timer and a flag on
-     `publish.sh` to skip the backup on the midday run.
-  2. *Stale cache.* Next keeps `.next/cache/fetch-cache` between builds and honours each loader's `revalidate` there.
-     Nine loaders use 24 hours (Budget, Treasury, states, state grants, companies, TVFY, asset sales, migration,
-     crime), and with `RandomizedDelaySec=10m` two runs can be under 24 hours apart, so a day-old file was reused on
-     some days. `deploy/publish.sh` now deletes that directory before the build. Live at the next pull.
-  3. *No "built at" on the pages.* Only `/sources` says when the last snapshot ran. A footer line would let a reader
-     see the age of what they are looking at. Not done.
+- **Continuous updating, built the same afternoon at the owner's request** ("this is a live site now"). Before: one
+  build at 04:30, so every figure was 17 to 48 hours behind its publisher (RBA tables about 09:00, decisions 14:30,
+  ABS 11:30), and nothing told anyone when a run failed. Now:
+  1. *Four publishes a day* (`deploy/receipts-publish.timer`): 04:30 (also the day's backup), 09:15, 12:30, 16:00
+     Canberra. The build takes about 11 minutes. `publish.sh` reinstalls dependencies only when the lock file changed
+     and backs up once per day (whichever run is first).
+  2. *Every run re-reads the fast feeds, once a day the rest.* `runSnapshot` reads indicator series, AusTender,
+     GrantConnect and fuel every run; every other step is skipped with "not re-read: done at HH:MM today" once a run
+     since Canberra midnight succeeded at it (so a failed step is retried on the next run). Keyed fuel schemes keep
+     their three-reads-a-day budget: a read younger than 7.5 hours stands. The fast loaders' cache windows are now
+     an hour (ABS, RBA, AOFM, GrantConnect; AusTender already was), so a rebuild sees a morning release. The Next
+     fetch cache is kept between builds on purpose: it is what makes the once-a-day steps cheap.
+  3. *Failures are visible without asking.* `/sources` lists each failed step of the last read with its message, and
+     says the schedule; every page ends with "Figures read <time> Canberra time". The journal gets the same summary.
+     `receipts-publish.service` retries a run that exits non-zero (build or deploy failure) after twenty minutes,
+     without a start limit.
+  4. *Still to prove*: the three failed steps from the 30 September 04:30 run. Queensland and WA state grants load
+     in seconds from the dev machine, so the VM's failure is specific to it (a cloud address refused, or memory);
+     the next run's failure list on `/sources` will say. **To put all of this live**, run once from the dev machine:
+     `gcloud compute ssh receipts-engine --zone australia-southeast1-b --tunnel-through-iap --command "sudo bash /opt/receipts/deploy/vm-install-publish.sh"`
+     (pulls, installs the timer and service, starts a publish now). Until then the VM still runs once a day and pulls
+     the new code at its next 04:30 run.
 
 ## Start here tomorrow (written 29 September 2026, evening)
 

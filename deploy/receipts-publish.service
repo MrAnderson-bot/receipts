@@ -2,6 +2,8 @@
 Description=Receipts: snapshot, build and publish the site
 After=network-online.target
 Wants=network-online.target
+# A failed run is retried (below) as often as it takes; never lock the unit out for retrying.
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
@@ -12,3 +14,7 @@ Environment=APP_DIR=/opt/receipts
 EnvironmentFile=/etc/receipts.env
 ExecStart=/usr/bin/bash /opt/receipts/deploy/publish.sh
 TimeoutStartSec=2h
+# A run that exits non-zero (a build or deploy failure, not a single source failing) runs again
+# twenty minutes later. A single source failing is recorded in the database and shown on /sources.
+Restart=on-failure
+RestartSec=20min

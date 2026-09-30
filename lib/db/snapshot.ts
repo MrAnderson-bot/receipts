@@ -1,5 +1,7 @@
-// Reads every feed once and stores the result. Run daily. Each source is saved
-// on its own, so one that is down doesn't stop the rest.
+// Reads every feed and stores the result. Runs inside each site build, several times a day. Each
+// source is saved on its own, so one that is down doesn't stop the rest. The cheap, fast-moving
+// feeds (indicator series, AusTender, GrantConnect, fuel) are read every run; everything else is a
+// slow-moving publication and is read once a day, on the first run that manages it.
 import { getStore, type RunResult } from "./index";
 import { getIndicators } from "../economy";
 import { tryGetSummary, fetchNotice, RANGES } from "../sources/austender";
@@ -12,7 +14,7 @@ import { tryGetProfits } from "../sources/abs-profits";
 import { tryGetState, STATE_CODES } from "../sources/states";
 import { loadStateGrantsFull, STATE_GRANT_CODES } from "../sources/state-grants";
 import { snapshotNsw, NSW_BUDGET_DEFAULT } from "../sources/state-grants/nsw";
-import { loadFuelFeed, keyNeeded, feedKeyNeeded, FUEL_FEEDS } from "../sources/fuel";
+import { loadFuelFeed, keyNeeded, feedKeyNeeded, feedIsKeyed, feedStates, FUEL_FEEDS } from "../sources/fuel";
 import { tryGetMigration } from "../sources/migration";
 import { tryGetCrime } from "../sources/crime";
 import { tryGetHomelessness } from "../sources/homelessness";
@@ -35,7 +37,20 @@ export async function runSnapshot(): Promise<RunResult[]> {
   const store = getStore();
   const runId = await store.startRun();
   const results: RunResult[] = [];
+
+  // Steps read every run; any other step is read once a day. "Today" is Canberra's, so the 04:30 run is the first.
+  const EVERY_RUN = ["series", "contracts", "grants", "fuel"];
+  const everyRun = (source: string) => EVERY_RUN.some((p) => source === p || source.startsWith(`${p}:`));
+  const sydney = new Date(new Date().toLocaleString("en-US", { timeZone: "Australia/Sydney" }));
+  const midnight = new Date(Date.now() - (sydney.getHours() * 3600 + sydney.getMinutes() * 60 + sydney.getSeconds()) * 1000).toISOString();
+  const doneToday = new Map<string, string>();
+  for (const run of await store.runsSince(midnight)) {
+    for (const r of run.results) if (r.ok && !r.detail.startsWith("not re-read")) doneToday.set(r.source, run.startedAt);
+  }
+  const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-AU", { timeZone: "Australia/Sydney", hour: "2-digit", minute: "2-digit" });
   const step = async (source: string, work: () => Promise<string>) => {
+    const at = everyRun(source) ? undefined : doneToday.get(source);
+    if (at) { results.push({ source, ok: true, detail: `not re-read: done at ${clock(at)} today` }); return; }
     try { results.push({ source, ok: true, detail: await work() }); }
     catch (e) { results.push({ source, ok: false, detail: e instanceof Error ? e.message : String(e) }); }
   };
@@ -242,6 +257,12 @@ export async function runSnapshot(): Promise<RunResult[]> {
       // No key is a fact about the environment, not a failed fetch: record it as skipped and move on.
       const missing = feedKeyNeeded(feed);
       if (missing) return `skipped: ${missing}`;
+      // Keyed schemes have small free tiers: at most three reads a day, so a read younger than about eight hours stands.
+      if (feedIsKeyed(feed)) {
+        const [last] = await store.snapshots("fuel", feedStates(feed)[0], 1);
+        const ageHours = last ? (Date.now() - Date.parse(last.capturedAt)) / 3_600_000 : Infinity;
+        if (ageHours < 7.5) return `not re-read: keyed scheme read ${ageHours.toFixed(1)} hours ago, kept to three reads a day`;
+      }
       const loaded = await loadFuelFeed(feed);
       const parts: string[] = [];
       for (const [code, { prices, ...summary }] of Object.entries(loaded)) {

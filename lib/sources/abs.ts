@@ -152,7 +152,7 @@ export async function fetchAbs(spec: AbsSpec): Promise<Series> {
   const url = `${BASE}/${spec.flow}/${spec.key}?startPeriod=${spec.from}`;
   const res = await fetch(url, {
     headers: { Accept: "application/vnd.sdmx.data+csv" },
-    next: { revalidate: 21_600 }, // ABS releases land at 11:30am; six hours is plenty
+    next: { revalidate: 3_600 }, // ABS releases land at 11:30am; an hour, so the midday rebuild sees the morning's release
   });
   if (!res.ok) throw new Error(`ABS returned ${res.status} for ${spec.flow}/${spec.key}`);
 

@@ -17,7 +17,7 @@ const HUB = "https://www.aofm.gov.au/data-hub";
 const headers = { "User-Agent": USER_AGENT };
 
 async function hubLink(pattern: RegExp): Promise<string> {
-  const res = await fetch(HUB, { headers, next: { revalidate: 21_600 } });
+  const res = await fetch(HUB, { headers, next: { revalidate: 3_600 } });
   if (!res.ok) throw new Error(`AOFM returned ${res.status} for the data hub page`);
   const html = await res.text();
   const m = html.match(new RegExp(`href="([^"]*${pattern.source}[^"]*\\.xlsx)"`, "i"));
@@ -26,7 +26,7 @@ async function hubLink(pattern: RegExp): Promise<string> {
 }
 
 async function book(url: string) {
-  const res = await fetch(url, { headers, next: { revalidate: 21_600 } });
+  const res = await fetch(url, { headers, next: { revalidate: 3_600 } });
   if (!res.ok) throw new Error(`AOFM returned ${res.status} for ${url}`);
   return readWorkbook(Buffer.from(await res.arrayBuffer()));
 }

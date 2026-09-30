@@ -39,6 +39,9 @@ export const feedKeyNeeded = (feed: FuelFeed) => (feed === "QLD" ? null : FEEDS[
 // Schemes read through a keyed API. Their free tiers are small (FuelCheck: 2,500 calls a month), so a
 // keyed scheme is read at most three times a day and a failure waits the same eight hours before a retry.
 const keyed = (feed: FuelFeed) => feed !== "WA" && feed !== "NT" && !(feed === "QLD" && !process.env.FUEL_QLD_KEY);
+// For the snapshot, which reads a feed uncached and must keep to the same spacing.
+export const feedIsKeyed = keyed;
+export const feedStates = (feed: FuelFeed): FuelCode[] => FEEDS[feed].states;
 const HOURS = 3_600;
 const revalidateFor = (feed: FuelFeed) => (keyed(feed) ? 8 * HOURS : 24 * HOURS);
 const cooldownFor = (feed: FuelFeed) => (keyed(feed) ? 8 * HOURS * 1000 : 20 * 60_000);
